@@ -1,0 +1,11 @@
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+dependencies.lock
+test/host/build/
+.vscode/
+*.pyc
+components/rules/test_apps/build/
+components/rules/test_apps/sdkconfig
+components/rules/test_apps/sdkconfig.old
