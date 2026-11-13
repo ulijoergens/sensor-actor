@@ -8,11 +8,12 @@ Working:
 - settings storage;
 - WiFi with the reconnect schedule and access-point fallback;
 - web UI: Home, Settings, Status and error log;
+- MQTT: status with last will, info every 60 s, discovery for the diagnostics;
 - serial console;
 - OTA self-check and rollback guard;
 - rule engine.
 
-Not yet: sensors, actors, MQTT, firmware upload.
+Not yet: sensors, actors, firmware upload.
 
 - Specification: [docs/FSD.md](docs/FSD.md)
 - Sensors: VL53L0X / VL53L1X, SHT25, SHT35, AHT20, BME280 (I2C), DS18B20 (1-Wire)
@@ -27,6 +28,7 @@ Not yet: sensors, actors, MQTT, firmware upload.
 | `components/sa_config/` | device settings in NVS, validation |
 | `components/wifi_mgr/` | station mode with the reconnect schedule, access-point fallback |
 | `components/webui/` | HTTP server, REST API, single-page UI (`www/`) |
+| `components/sa_mqtt/` | MQTT client: status/last will, info, discovery, actor commands |
 | `components/sa_log/` | ring buffer of warnings and errors for the Status page |
 | `components/rules/` | threshold rule engine (pure C) |
 | `components/*/test/` | Unity unit tests, collected by `test/unit` |
@@ -41,7 +43,9 @@ idf.py set-target esp32
 idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
-JSON support (cJSON) is fetched from the ESP component registry on the first build; the version is pinned in `components/webui/idf_component.yml`.
+cJSON and the MQTT client are fetched from the ESP component registry on the first build; the versions are pinned in the components' `idf_component.yml` files.
+
+openHAB picks the node up automatically if the MQTT binding is connected to the same broker and the **Home Assistant Binding** add-on is installed.
 
 ## First start
 

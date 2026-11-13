@@ -134,7 +134,7 @@ Base topic: `sensact/<device-id>/`. Retained where marked (R).
 | `…/sensor/<sid>/state` (R) | out | JSON `{"temperature":21.4,"temperature_median":21.3,"ts":…,"ok":true}` |
 | `…/actor/<aid>/state` (R) | out | `ON` / `OFF` |
 | `…/actor/<aid>/set` | in | `ON` / `OFF` / `TOGGLE` |
-| `…/info` (R) | out | JSON: firmware version, IP, RSSI, uptime (every 60 s) |
+| `…/info` (R) | out | JSON `{"firmware","ip","rssi","uptime","heap"}` (on connect and every 60 s) |
 
 - **REQ-MQ-1:** values are published on every read.
 - **REQ-MQ-2:** actor state is published on every change, and again after each reconnect.
@@ -145,6 +145,8 @@ Base topic: `sensact/<device-id>/`. Retained where marked (R).
   - Messages are retained and re-sent after every MQTT reconnect.
   - A sensor, quantity or actor that is removed or deactivated gets an empty retained message, which removes it from openHAB.
   - All entities share one device record (name, ID, firmware version, MAC), and they use `…/status` as their availability topic.
+  - Diagnostic entities (from `…/info`): WiFi signal, uptime, IP address, free memory, firmware.
+  - openHAB 5 needs the **Home Assistant Binding** add-on (separate from the MQTT binding) to discover these.
 
 ## 6. Connectivity
 
@@ -154,7 +156,7 @@ Base topic: `sensact/<device-id>/`. Retained where marked (R).
   3. then start **access-point mode**: SSID `SensAct-<last 4 hex digits of MAC>`, web UI at 192.168.4.1.
 - **REQ-WIFI-2 [PROPOSED]:** while in AP mode, the node retries the configured network every 15 min. On success it switches back to station mode.
 - **REQ-WIFI-3:** a node without WiFi credentials starts directly in AP mode.
-- **REQ-MQ-5:** the MQTT client reconnects on its own after WiFi returns. The broker IP and port are configurable; username and password are optional [PROPOSED].
+- **REQ-MQ-5:** the MQTT client runs only while WiFi has an IP address, and reconnects on its own (every 10 s) after WiFi or the broker returns. Each outage is logged once, with the reason. The broker IP and port are configurable; username and password are optional [PROPOSED].
 - **REQ-NET-1 [PROPOSED]:** the node is reachable by mDNS as `<device-name>.local`.
 
 ### 6.1 Serial console

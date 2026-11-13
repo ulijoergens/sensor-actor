@@ -24,6 +24,7 @@
 #include "ping/ping_sock.h"
 #include "sa_config.h"
 #include "sa_log.h"
+#include "sa_mqtt.h"
 #include "wifi_mgr.h"
 
 static int cmd_status(int argc, char **argv)
@@ -46,6 +47,16 @@ static int cmd_status(int argc, char **argv)
     printf("\n");
     if (w.ap_active) {
         printf("ap       \"%s\" at %s\n", w.ap_ssid, w.ap_ip);
+    }
+    sa_mqtt_status_t m;
+    sa_mqtt_get_status(&m);
+    if (!m.configured) {
+        printf("mqtt     not configured\n");
+    } else if (m.connected) {
+        printf("mqtt     connected to %s, %lu messages sent\n", m.broker, (unsigned long)m.published);
+    } else {
+        printf("mqtt     not connected to %s for %lus%s%s\n", m.broker, (unsigned long)m.disconnected_s,
+               m.last_error[0] ? ": " : "", m.last_error);
     }
     printf("log      %lu warnings/errors since boot\n", (unsigned long)sa_log_count());
     return 0;

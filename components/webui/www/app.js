@@ -36,6 +36,12 @@ function wifiText(w) {
   return [w.state, ''];
 }
 
+function mqttText(m) {
+  if (m.state === 'not configured') return ['Off', 'No broker configured'];
+  if (m.state === 'connected') return ['Connected', `${m.broker} · ${m.published} messages sent`];
+  return ['Disconnected', `${m.broker} · for ${duration(m.disconnected_s)}${m.last_error ? ' · ' + m.last_error : ''}`];
+}
+
 // ------------------------------------------------------------- pages
 
 async function refreshHome() {
@@ -44,8 +50,9 @@ async function refreshHome() {
   const [w, wsub] = wifiText(s.wifi);
   $('#h-wifi').textContent = w;
   $('#h-wifi-sub').textContent = wsub;
-  $('#h-mqtt').textContent = s.mqtt.state === 'not configured' ? 'Off' : '–';
-  $('#h-mqtt-sub').textContent = s.mqtt.state;
+  const [m, msub] = mqttText(s.mqtt);
+  $('#h-mqtt').textContent = m;
+  $('#h-mqtt-sub').textContent = msub;
   $('#h-uptime').textContent = duration(s.device.uptime_s);
   $('#h-reset').textContent = 'Last start: ' + s.device.reset_reason;
   $('#h-log').textContent = s.log.count;
@@ -62,7 +69,7 @@ async function refreshStatus() {
     ['Free memory', `${(s.device.heap_free / 1024).toFixed(0)} KB (lowest ${(s.device.heap_min / 1024).toFixed(0)} KB)`],
     ['WiFi', `${w}${wsub ? ' · ' + wsub : ''}`],
     ['Connection attempts', s.wifi.state === 'connected' ? '–' : String(s.wifi.attempts)],
-    ['MQTT', s.mqtt.state],
+    ['MQTT', mqttText(s.mqtt).join(' · ')],
     ['Warnings / errors', String(s.log.count)],
   ];
   const t = $('#status-table');

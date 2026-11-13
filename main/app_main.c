@@ -14,6 +14,7 @@
 #include "console.h"
 #include "sa_config.h"
 #include "sa_log.h"
+#include "sa_mqtt.h"
 #include "webui.h"
 #include "wifi_mgr.h"
 
@@ -68,6 +69,9 @@ void app_main(void)
 
     ESP_ERROR_CHECK(wifi_mgr_start());
     bool web_ok = webui_start() == ESP_OK;
+    if (sa_mqtt_start() != ESP_OK) {
+        ESP_LOGE(TAG, "MQTT client failed to start");
+    }
     console_start();
     confirm_ota_image(web_ok);
 }

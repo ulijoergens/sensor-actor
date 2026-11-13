@@ -12,6 +12,7 @@
 #include "esp_timer.h"
 #include "sa_config.h"
 #include "sa_log.h"
+#include "sa_mqtt.h"
 #include "wifi_mgr.h"
 
 static const char *TAG = "web";
@@ -137,8 +138,16 @@ static esp_err_t api_status(httpd_req_t *req)
     cJSON_AddNumberToObject(wj, "next_retry_s", w.next_retry_s);
     cJSON_AddNumberToObject(wj, "attempts", w.attempts);
 
+    sa_mqtt_status_t ms;
+    sa_mqtt_get_status(&ms);
     cJSON *m = cJSON_AddObjectToObject(root, "mqtt");
-    cJSON_AddStringToObject(m, "state", c->mqtt_host[0] ? "not implemented yet" : "not configured");
+    cJSON_AddStringToObject(m, "state", !ms.configured ? "not configured"
+                                        : ms.connected ? "connected" : "disconnected");
+    cJSON_AddStringToObject(m, "broker", ms.broker);
+    cJSON_AddNumberToObject(m, "connects", ms.connects);
+    cJSON_AddNumberToObject(m, "published", ms.published);
+    cJSON_AddNumberToObject(m, "disconnected_s", ms.disconnected_s);
+    cJSON_AddStringToObject(m, "last_error", ms.last_error);
 
     cJSON *l = cJSON_AddObjectToObject(root, "log");
     cJSON_AddNumberToObject(l, "count", sa_log_count());
