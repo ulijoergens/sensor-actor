@@ -28,7 +28,7 @@ The node is ESP-IDF firmware for a plain ESP32 (4 MB flash). It:
   - GPIO 34–39 (input-only);
   - the pins already used by I2C or 1-Wire.
 
-  Strapping pins (0, 2, 12, 15) are accepted with a warning.
+  Strapping pins (0, 2, 5, 12, 15) are accepted with a warning.
 - **REQ-HW-3:** each relay has an "active low" option, because many relay boards switch on LOW.
 
 ### 2.1 Sensor detection
@@ -156,6 +156,15 @@ Base topic: `sensact/<device-id>/`. Retained where marked (R).
 - **REQ-WIFI-3:** a node without WiFi credentials starts directly in AP mode.
 - **REQ-MQ-5:** the MQTT client reconnects on its own after WiFi returns. The broker IP and port are configurable; username and password are optional [PROPOSED].
 - **REQ-NET-1 [PROPOSED]:** the node is reachable by mDNS as `<device-name>.local`.
+
+### 6.1 Serial console
+
+- **REQ-CON-1:** a console on UART0 (115200 baud) offers:
+  - `status` and `show` (settings, with passwords hidden);
+  - `set <key> <value>`, which validates and saves one setting;
+  - `log`, `reboot` and `factory-reset`.
+
+  It is used to set up the node and for bench tests.
 
 ## 7. Web UI
 

@@ -2,7 +2,17 @@
 
 ESP-IDF firmware for an ESP32 node that reads sensors, switches relays with threshold rules, talks MQTT (with discovery for openHAB / Home Assistant), and is configured through a built-in web UI with OTA updates.
 
-**Status:** early development. The functional specification and the rule engine are done.
+**Status:** early development.
+
+Working:
+- settings storage;
+- WiFi with the reconnect schedule and access-point fallback;
+- web UI: Home, Settings, Status and error log;
+- serial console;
+- OTA self-check and rollback guard;
+- rule engine.
+
+Not yet: sensors, actors, MQTT, firmware upload.
 
 - Specification: [docs/FSD.md](docs/FSD.md)
 - Sensors: VL53L0X / VL53L1X, SHT25, SHT35, AHT20, BME280 (I2C), DS18B20 (1-Wire)
@@ -13,8 +23,13 @@ ESP-IDF firmware for an ESP32 node that reads sensors, switches relays with thre
 
 | Path | Content |
 |---|---|
-| `main/` | application entry point |
-| `components/rules/` | threshold rule engine (pure C), with on-target unit tests in `test_apps/` |
+| `main/` | start-up sequence, OTA self-check, serial console |
+| `components/sa_config/` | device settings in NVS, validation |
+| `components/wifi_mgr/` | station mode with the reconnect schedule, access-point fallback |
+| `components/webui/` | HTTP server, REST API, single-page UI (`www/`) |
+| `components/sa_log/` | ring buffer of warnings and errors for the Status page |
+| `components/rules/` | threshold rule engine (pure C) |
+| `components/*/test/` | Unity unit tests, collected by `test/unit` |
 | `partitions.csv` | 4 MB layout: two OTA slots plus a storage partition |
 | `docs/FSD.md` | functional specification with requirement IDs (REQ-…) |
 
@@ -26,12 +41,38 @@ idf.py set-target esp32
 idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
+JSON support (cJSON) is fetched from the ESP component registry on the first build; the version is pinned in `components/webui/idf_component.yml`.
+
+## First start
+
+Without WiFi settings the node opens the access point **SensAct-XXXX** (no password).
+1. Connect to it.
+2. Open http://192.168.4.1.
+3. Under *Settings*, enter your network and save. The node restarts and joins your network.
+
+Alternatively, use the serial console (115200 baud):
+
+```
+sa> set ssid MyNetwork
+sa> set pass my-wifi-password
+sa> reboot
+```
+
+Other console commands: `status`, `show`, `log`, `factory-reset`, `help`.
+
 ## Tests
 
-Rule engine unit tests (run on the board, results on the serial console):
+Unit tests run on the board; the results appear on the serial console:
 
 ```sh
-idf.py -C components/rules/test_apps -p /dev/ttyUSB0 flash monitor
+idf.py -C test/unit -p /dev/ttyUSB0 flash monitor
+```
+
+To see the WiFi reconnect and access-point fallback in about a minute instead of 65, build with short timers:
+
+```sh
+idf.py -B build-test -D SDKCONFIG=build-test/sdkconfig \
+       -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.test-timing" -p /dev/ttyUSB0 flash monitor
 ```
 
 ## License

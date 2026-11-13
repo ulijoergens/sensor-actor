@@ -1,0 +1,2 @@
+# Overlay for bench tests: idf.py -B build-test -D SDKCONFIG=build-test/sdkconfig -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.test-timing" build
+CONFIG_SA_WIFI_TEST_TIMING=y

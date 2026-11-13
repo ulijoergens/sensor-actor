@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sensor-Actor</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <a class="brand" href="#/"><span class="dot" id="hdr-dot"></span><span id="hdr-name">Sensor-Actor</span></a>
+  <nav>
+    <a href="#/" data-page="home">Home</a>
+    <a class="soon" title="Coming in a later version">Sensors</a>
+    <a class="soon" title="Coming in a later version">Actors</a>
+    <a href="#/settings" data-page="settings">Settings</a>
+    <a href="#/status" data-page="status">Status</a>
+  </nav>
+</header>
+
+<main>
+  <!-- Home -->
+  <section id="page-home" hidden>
+    <h1>Overview</h1>
+    <div class="cards">
+      <div class="card"><h3>WiFi</h3><div class="big" id="h-wifi">–</div><div class="sub" id="h-wifi-sub"></div></div>
+      <div class="card"><h3>MQTT</h3><div class="big" id="h-mqtt">–</div><div class="sub" id="h-mqtt-sub"></div></div>
+      <div class="card"><h3>Uptime</h3><div class="big" id="h-uptime">–</div><div class="sub" id="h-reset"></div></div>
+      <div class="card"><h3>Warnings / errors</h3><div class="big" id="h-log">–</div><div class="sub"><a href="#/status">Show log</a></div></div>
+    </div>
+    <h2>Favourites</h2>
+    <p class="muted">Favourite sensors and actors will appear here once sensor and actor support is added.</p>
+  </section>
+
+  <!-- Settings -->
+  <section id="page-settings" hidden>
+    <h1>Settings</h1>
+    <form id="settings" autocomplete="off" novalidate>
+      <fieldset><legend>Device</legend>
+        <label>Device name <input name="name" maxlength="32" required></label>
+        <label>Device ID <input name="id" maxlength="8" pattern="[a-z0-9_\-]{1,8}" required>
+          <small>1–8 characters a–z, 0–9, _ or -. Used in MQTT topics.</small></label>
+      </fieldset>
+      <fieldset><legend>WiFi</legend>
+        <label>Network (SSID) <input name="wifi_ssid" maxlength="32">
+          <small>Leave empty to run as access point only.</small></label>
+        <label>Password <input name="wifi_pass" type="password" maxlength="64" data-secret="wifi_pass"></label>
+        <label class="check"><input type="checkbox" name="wifi_pass_clear"> Remove stored password (open network)</label>
+      </fieldset>
+      <fieldset><legend>MQTT</legend>
+        <label>Broker (IP or host name) <input name="mqtt_host" maxlength="64">
+          <small>Leave empty to disable MQTT.</small></label>
+        <label>Port <input name="mqtt_port" type="number" min="1" max="65535" required></label>
+        <label>User <input name="mqtt_user" maxlength="32"></label>
+        <label>Password <input name="mqtt_pass" type="password" maxlength="64" data-secret="mqtt_pass"></label>
+        <label class="check"><input type="checkbox" name="mqtt_pass_clear"> Remove stored password</label>
+        <label class="check"><input type="checkbox" name="discovery"> Discovery (openHAB / Home Assistant)</label>
+        <label>Discovery prefix <input name="discovery_prefix" maxlength="32"></label>
+      </fieldset>
+      <fieldset><legend>Pins</legend>
+        <div class="row">
+          <label>I2C SDA <input name="i2c_sda" type="number" min="0" max="39" required></label>
+          <label>I2C SCL <input name="i2c_scl" type="number" min="0" max="39" required></label>
+          <label>1-Wire <input name="onewire" type="number" min="0" max="39" required></label>
+        </div>
+      </fieldset>
+      <p class="msg" id="settings-msg"></p>
+      <div class="buttons">
+        <button type="submit" class="primary">Save and restart</button>
+        <button type="button" id="btn-reboot">Restart</button>
+      </div>
+    </form>
+    <h2>Firmware update</h2>
+    <p class="muted">Firmware upload (OTA) will be added in the next version.</p>
+  </section>
+
+  <!-- Status -->
+  <section id="page-status" hidden>
+    <h1>Status</h1>
+    <table class="kv" id="status-table"></table>
+    <h2>Error log</h2>
+    <table class="log"><thead><tr><th>Time</th><th></th><th>Message</th></tr></thead><tbody id="log-body"></tbody></table>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

@@ -2,10 +2,11 @@ build/
 sdkconfig
 sdkconfig.old
 managed_components/
-dependencies.lock
 test/host/build/
 .vscode/
 *.pyc
-components/rules/test_apps/build/
-components/rules/test_apps/sdkconfig
-components/rules/test_apps/sdkconfig.old
+test/unit/build/
+test/unit/sdkconfig
+test/unit/sdkconfig.old
+test/unit/managed_components/
+build-test/
