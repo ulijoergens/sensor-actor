@@ -162,7 +162,8 @@ Base topic: `sensact/<device-id>/`. Retained where marked (R).
 - **REQ-CON-1:** a console on UART0 (115200 baud) offers:
   - `status` and `show` (settings, with passwords hidden);
   - `set <key> <value>`, which validates and saves one setting;
-  - `log`, `reboot` and `factory-reset`.
+  - `log`, `reboot` and `factory-reset`;
+  - `net` (IP, gateway, DNS, access point) and `ping <ip>` for network diagnostics.
 
   It is used to set up the node and for bench tests.
 

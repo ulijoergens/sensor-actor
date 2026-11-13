@@ -4,6 +4,7 @@
 //   show                        current settings (passwords hidden)
 //   set <key> <value...>        change one setting and save it; most need a reboot
 //   log                         warnings and errors, newest first
+//   net | ping <ip> [count]     network diagnostics
 //   reboot | factory-reset
 #include "console.h"
 
@@ -14,6 +15,13 @@
 #include "esp_console.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "esp_mac.h"
+#include "esp_netif.h"
+#include "esp_wifi.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "lwip/inet.h"
+#include "ping/ping_sock.h"
 #include "sa_config.h"
 #include "sa_log.h"
 #include "wifi_mgr.h"
@@ -133,6 +141,91 @@ static int cmd_log(int argc, char **argv)
     return 0;
 }
 
+static int cmd_net(int argc, char **argv)
+{
+    esp_netif_t *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    esp_netif_ip_info_t ip;
+    if (sta && esp_netif_get_ip_info(sta, &ip) == ESP_OK) {
+        printf("ip       " IPSTR "\nnetmask  " IPSTR "\ngateway  " IPSTR "\n", IP2STR(&ip.ip),
+               IP2STR(&ip.netmask), IP2STR(&ip.gw));
+        esp_netif_dns_info_t dns;
+        if (esp_netif_get_dns_info(sta, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK) {
+            printf("dns      " IPSTR "\n", IP2STR(&dns.ip.u_addr.ip4));
+        }
+    }
+    uint8_t mac[6];
+    if (esp_wifi_get_mac(WIFI_IF_STA, mac) == ESP_OK) {
+        printf("mac      " MACSTR "\n", MAC2STR(mac));
+    }
+    wifi_ap_record_t ap;
+    if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+        printf("ap       \"%s\" bssid " MACSTR ", channel %d, RSSI %d dBm\n", (const char *)ap.ssid,
+               MAC2STR(ap.bssid), ap.primary, ap.rssi);
+    } else {
+        printf("ap       not connected\n");
+    }
+    return 0;
+}
+
+static SemaphoreHandle_t s_ping_done;
+
+static void ping_ok(esp_ping_handle_t h, void *arg)
+{
+    uint32_t seq, ms;
+    ip_addr_t from;
+    esp_ping_get_profile(h, ESP_PING_PROF_SEQNO, &seq, sizeof(seq));
+    esp_ping_get_profile(h, ESP_PING_PROF_TIMEGAP, &ms, sizeof(ms));
+    esp_ping_get_profile(h, ESP_PING_PROF_IPADDR, &from, sizeof(from));
+    printf("reply from %s: seq=%lu time=%lu ms\n", ipaddr_ntoa(&from), (unsigned long)seq, (unsigned long)ms);
+}
+
+static void ping_timeout(esp_ping_handle_t h, void *arg)
+{
+    uint32_t seq;
+    esp_ping_get_profile(h, ESP_PING_PROF_SEQNO, &seq, sizeof(seq));
+    printf("timeout: seq=%lu\n", (unsigned long)seq);
+}
+
+static void ping_end(esp_ping_handle_t h, void *arg)
+{
+    uint32_t sent, got;
+    esp_ping_get_profile(h, ESP_PING_PROF_REQUEST, &sent, sizeof(sent));
+    esp_ping_get_profile(h, ESP_PING_PROF_REPLY, &got, sizeof(got));
+    printf("%lu sent, %lu received\n", (unsigned long)sent, (unsigned long)got);
+    xSemaphoreGive(s_ping_done);
+}
+
+static int cmd_ping(int argc, char **argv)
+{
+    if (argc < 2) {
+        printf("usage: ping <ipv4-address> [count]\n");
+        return 1;
+    }
+    esp_ping_config_t pc = ESP_PING_DEFAULT_CONFIG();
+    if (!ipaddr_aton(argv[1], &pc.target_addr)) {
+        printf("not an IP address: %s\n", argv[1]);
+        return 1;
+    }
+    pc.count = argc > 2 ? (uint32_t)atoi(argv[2]) : 4;
+    if (pc.count == 0 || pc.count > 20) {
+        pc.count = 4;
+    }
+    if (!s_ping_done) {
+        s_ping_done = xSemaphoreCreateBinary();
+    }
+    esp_ping_callbacks_t cbs = {.on_ping_success = ping_ok, .on_ping_timeout = ping_timeout,
+                                .on_ping_end = ping_end};
+    esp_ping_handle_t h;
+    if (esp_ping_new_session(&pc, &cbs, &h) != ESP_OK) {
+        printf("ping failed to start\n");
+        return 1;
+    }
+    esp_ping_start(h);
+    xSemaphoreTake(s_ping_done, pdMS_TO_TICKS(pc.count * 2000 + 2000));
+    esp_ping_delete_session(h);
+    return 0;
+}
+
 static int cmd_reboot(int argc, char **argv)
 {
     printf("rebooting\n");
@@ -161,6 +254,8 @@ void console_start(void)
         {.command = "show", .help = "Show settings (passwords hidden)", .func = cmd_show},
         {.command = "set", .help = "set <key> <value>: change and save one setting", .func = cmd_set},
         {.command = "log", .help = "Warnings and errors, newest first", .func = cmd_log},
+        {.command = "net", .help = "IP address, gateway, DNS and access point details", .func = cmd_net},
+        {.command = "ping", .help = "ping <ip> [count]: check reachability from the device", .func = cmd_ping},
         {.command = "reboot", .help = "Restart the device", .func = cmd_reboot},
         {.command = "factory-reset", .help = "Erase all settings and restart", .func = cmd_factory_reset},
     };

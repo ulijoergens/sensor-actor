@@ -58,7 +58,7 @@ sa> set pass my-wifi-password
 sa> reboot
 ```
 
-Other console commands: `status`, `show`, `log`, `factory-reset`, `help`.
+Other console commands: `status`, `show`, `log`, `net`, `ping <ip>`, `factory-reset`, `help`.
 
 ## Tests
 

@@ -217,6 +217,18 @@ static void on_ip_event(void *arg, esp_event_base_t base, int32_t id, void *data
     }
 }
 
+// The node is mains-powered and must answer ARP and HTTP while idle. With modem sleep
+// (the default) some access points / mesh repeaters fail to deliver ARP requests, and the
+// node becomes unreachable until it sends traffic itself.
+static esp_err_t start_wifi(void)
+{
+    esp_err_t err = esp_wifi_start();
+    if (err == ESP_OK) {
+        esp_wifi_set_ps(WIFI_PS_NONE);
+    }
+    return err;
+}
+
 static void make_hostname(char *out, size_t len, const char *name)
 {
     size_t j = 0;
@@ -265,7 +277,7 @@ esp_err_t wifi_mgr_start(void)
     if (!s_have_ssid) {
         ESP_LOGW(TAG, "no WiFi network configured");
         start_ap();
-        return esp_wifi_start();
+        return start_wifi();
     }
 
     wifi_config_t sta = {0};
@@ -279,7 +291,7 @@ esp_err_t wifi_mgr_start(void)
     s_lost_at_us = esp_timer_get_time();   // the retry schedule also applies at boot
     set_state(WIFI_MGR_CONNECTING);
     ESP_LOGI(TAG, "connecting to \"%s\" as %s", s_ssid, host);
-    return esp_wifi_start();
+    return start_wifi();
 }
 
 void wifi_mgr_get_status(wifi_mgr_status_t *out)
