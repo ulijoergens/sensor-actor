@@ -28,7 +28,8 @@ typedef struct {
     char elf_sha256[17];      // first 16 hex characters of the crashing firmware's ELF hash
 } sa_crash_info_t;
 
-// Reads the stored dump (if any) and logs a summary line. Call once at boot.
+// Reads the stored dump (if any) and logs a summary line the first time it is seen.
+// Call once at boot, after nvs_flash_init().
 void sa_crash_init(void);
 
 // Summary of the stored dump (present = false if there is none).

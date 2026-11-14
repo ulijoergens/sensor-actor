@@ -72,9 +72,9 @@ void app_main(void)
     const esp_app_desc_t *app = esp_app_get_description();
     ESP_LOGI(TAG, "sensor-actor %s starting (slot %s)", app->version, esp_ota_get_running_partition()->label);
 
-    sa_crash_init();   // logs a stored crash report into the error log
     init_nvs();
     sa_log_persist_start();   // stored log from earlier boots, boot counter
+    sa_crash_init();          // logs a new crash report (once) into the error log
     ESP_ERROR_CHECK(sa_config_init());
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());

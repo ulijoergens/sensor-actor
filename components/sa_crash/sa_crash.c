@@ -7,6 +7,7 @@
 #include "esp_core_dump.h"
 #include "esp_flash.h"
 #include "esp_log.h"
+#include "nvs.h"
 
 static const char *TAG = "crash";
 
@@ -43,10 +44,29 @@ static void load(void)
     }
 }
 
+// A stored dump stays until it is erased; log it only once (when it is new), so the
+// persistent error log does not fill up with the same crash on every boot.
+static bool already_reported(void)
+{
+    uint32_t id = s_info.pc ^ (uint32_t)s_info.size ^ (s_info.bt_depth ? s_info.bt[0] : 0) ^ 0x5A5A0000u;
+    uint32_t seen = 0;
+    nvs_handle_t h;
+    if (nvs_open("salog", NVS_READWRITE, &h) != ESP_OK) {
+        return false;
+    }
+    bool same = nvs_get_u32(h, "crash_seen", &seen) == ESP_OK && seen == id;
+    if (!same) {
+        nvs_set_u32(h, "crash_seen", id);
+        nvs_commit(h);
+    }
+    nvs_close(h);
+    return same;
+}
+
 void sa_crash_init(void)
 {
     load();
-    if (!s_info.present) {
+    if (!s_info.present || already_reported()) {
         return;
     }
     char bt[16 * 11 + 1] = "";
