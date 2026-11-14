@@ -123,6 +123,12 @@ static esp_err_t set_mode(vl53l1x_t *s, vl53l1x_mode_t mode)
 esp_err_t vl53l1x_init(vl53l1x_t *s, i2c_master_bus_handle_t bus, uint8_t addr, vl53l1x_mode_t mode)
 {
     memset(s, 0, sizeof(*s));
+    // Check presence with a plain address probe first. Full transfers to an absent device
+    // time out, and the driver's timeout recovery has tripped the interrupt watchdog with
+    // the sensor unplugged.
+    if (i2c_master_probe(bus, addr, XFER_MS) != ESP_OK) {
+        return ESP_ERR_NOT_FOUND;
+    }
     i2c_device_config_t dc = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = addr,
@@ -136,7 +142,8 @@ esp_err_t vl53l1x_init(vl53l1x_t *s, i2c_master_bus_handle_t bus, uint8_t addr, 
     uint8_t id = 0, booted = 0;
     if ((err = rd(s, REG_MODEL_ID, &id, 1)) != ESP_OK || id != 0xEA) {
         ESP_LOGW(TAG, "0x%02X: model ID 0x%02X, not a VL53L1X", addr, id);
-        vl53l1x_deinit(s);
+        i2c_master_bus_rm_device(s->dev);
+        s->dev = NULL;
         return err != ESP_OK ? err : ESP_ERR_NOT_FOUND;
     }
     for (int t = 0; t < 100 && !booted; t++) {
@@ -146,7 +153,8 @@ esp_err_t vl53l1x_init(vl53l1x_t *s, i2c_master_bus_handle_t bus, uint8_t addr, 
         }
     }
     if (!booted) {
-        vl53l1x_deinit(s);
+        i2c_master_bus_rm_device(s->dev);
+        s->dev = NULL;
         return ESP_ERR_TIMEOUT;
     }
 
@@ -163,7 +171,8 @@ esp_err_t vl53l1x_init(vl53l1x_t *s, i2c_master_bus_handle_t bus, uint8_t addr, 
     if (err == ESP_OK) err = wr8(s, REG_SYSTEM_MODE_START, 0x40);   // continuous ranging
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "0x%02X: init failed: %s", addr, esp_err_to_name(err));
-        vl53l1x_deinit(s);
+        i2c_master_bus_rm_device(s->dev);   // no further writes to a device that failed
+        s->dev = NULL;
         return err;
     }
     ESP_LOGI(TAG, "0x%02X: ranging, %s mode", addr, mode == VL53L1X_SHORT ? "short" : "long");

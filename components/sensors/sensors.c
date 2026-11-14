@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "driver/i2c_master.h"
 #include "drv_vl53l1x.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -21,6 +22,7 @@ static const char *TAG = "sensors";
 #define STORE_VERSION  1
 #define FAILS_TO_ERROR 3            // REQ-SEN-5
 #define RETRY_INIT_US  (30LL * 1000 * 1000)
+#define RETRY_ERROR_US (10LL * 1000 * 1000)   // re-init interval while a sensor is in error
 
 typedef struct {
     uint16_t version;
@@ -262,6 +264,9 @@ static bool driver_init(int i)
     case SA_CHIP_VL53L1X: {
         sa_i2c_lock();
         esp_err_t err = vl53l1x_init(&r->vl, bus, c->addr, c->vl_mode == 1 ? VL53L1X_SHORT : VL53L1X_LONG);
+        if (err != ESP_OK) {
+            sa_i2c_recover();   // the device is detached again; rebuild the bus cleanly
+        }
         sa_i2c_unlock();
         if (err != ESP_OK) {
             r->state = SA_SENSOR_MISSING;
@@ -318,6 +323,11 @@ static void read_one(int i, int64_t now)
     if (!r->inited) {
         sa_sensor_state_t before = r->state;
         if (!driver_init(i)) {
+            if (before == SA_SENSOR_ERROR) {
+                r->state = SA_SENSOR_ERROR;   // keep reporting the outage as one error
+                r->next_due_us = now + RETRY_ERROR_US;
+                return;
+            }
             if (before != r->state) {
                 ESP_LOGW(TAG, "%s: %s", c->id, r->error);
                 if (s_value_cb) {
@@ -332,13 +342,29 @@ static void read_one(int i, int64_t now)
             }
             return;
         }
-        r->state = SA_SENSOR_STARTING;
+        if (before != SA_SENSOR_ERROR) {
+            r->state = SA_SENSOR_STARTING;
+        }
         r->error[0] = '\0';
     }
 
     float v[SA_MAX_QUANTITIES];
     if (!driver_read(i, v)) {
         r->fails++;
+        if (r->fails >= FAILS_TO_ERROR && r->state == SA_SENSOR_ERROR) {
+            // Still failing: release and re-initialise the sensor (it may have been
+            // unplugged and lost its configuration).
+            sa_i2c_lock();
+            if (r->vl.dev) {
+                i2c_master_bus_rm_device(r->vl.dev);   // it does not answer: no stop command
+                r->vl.dev = NULL;
+            }
+            sa_i2c_recover();
+            sa_i2c_unlock();
+            r->inited = false;
+            r->next_due_us = now + RETRY_ERROR_US;
+            return;
+        }
         if (r->fails >= FAILS_TO_ERROR && r->state != SA_SENSOR_ERROR) {
             r->state = SA_SENSOR_ERROR;
             ESP_LOGW(TAG, "%s: %d failed reads in a row: %s", c->id, r->fails, r->error);

@@ -64,7 +64,7 @@ uint8_t sa_crc8_sensirion(const uint8_t *data, int len)
     return crc;
 }
 
-esp_err_t sa_i2c_init(void)
+static esp_err_t create_bus(void)
 {
     const sa_device_cfg_t *c = sa_config_get();
     i2c_master_bus_config_t bc = {
@@ -75,13 +75,41 @@ esp_err_t sa_i2c_init(void)
         .glitch_ignore_cnt = 7,
         .flags.enable_internal_pullup = true,
     };
-    s_mutex = xSemaphoreCreateRecursiveMutex();
     esp_err_t err = i2c_new_master_bus(&bc, &s_bus);
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "bus on SDA %d, SCL %d", c->i2c_sda, c->i2c_scl);
     } else {
         ESP_LOGE(TAG, "bus init on SDA %d, SCL %d failed: %s", c->i2c_sda, c->i2c_scl, esp_err_to_name(err));
     }
+    return err;
+}
+
+esp_err_t sa_i2c_init(void)
+{
+    s_mutex = xSemaphoreCreateRecursiveMutex();
+    // The driver logs every failed transfer; with a sensor unplugged that would fill the
+    // error log. The sensor module logs one line per state change instead.
+    esp_log_level_set("i2c.master", ESP_LOG_NONE);
+    esp_log_level_set("i2c.common", ESP_LOG_NONE);
+    return create_bus();
+}
+
+esp_err_t sa_i2c_recover(void)
+{
+    sa_i2c_lock();
+    esp_err_t err = ESP_OK;
+    if (s_bus) {
+        err = i2c_del_master_bus(s_bus);   // fails if devices are still attached
+        if (err == ESP_OK) {
+            s_bus = NULL;
+        } else {
+            ESP_LOGW(TAG, "bus recovery skipped: %s", esp_err_to_name(err));
+        }
+    }
+    if (!s_bus) {
+        err = create_bus();
+    }
+    sa_i2c_unlock();
     return err;
 }
 

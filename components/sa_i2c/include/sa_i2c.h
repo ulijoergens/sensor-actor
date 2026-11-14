@@ -45,6 +45,11 @@ esp_err_t sa_i2c_init(void);
 // The shared bus handle (NULL if init failed), for sensor drivers.
 i2c_master_bus_handle_t sa_i2c_bus(void);
 
+// Deletes and re-creates the bus (pins, pull-ups, interrupt). Call with no devices
+// attached, after transfers failed: the driver's own timeout recovery reroutes the pins,
+// after which the lines float and further transfers have tripped the interrupt watchdog.
+esp_err_t sa_i2c_recover(void);
+
 // Serialises bus access between the sensor task and scans.
 void sa_i2c_lock(void);
 void sa_i2c_unlock(void);
