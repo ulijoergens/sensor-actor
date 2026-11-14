@@ -29,6 +29,7 @@ typedef struct {
 
 typedef struct {
     bool on;
+    bool driven;               // pin configured as output (configure once: re-configuring logs a GPIO conflict)
     char source[8];
     int64_t changed_us;
     rule_state_t rs;
@@ -200,7 +201,12 @@ static void set_state(int i, bool on, const char *source)
     bool changed = r->on != on;
     r->on = on;
     strlcpy(r->source, source, sizeof(r->source));
-    gpio_drive(c->gpio, sa_actor_gpio_level(on, c->active_low));
+    if (r->driven) {
+        gpio_set_level(c->gpio, sa_actor_gpio_level(on, c->active_low));
+    } else {
+        gpio_drive(c->gpio, sa_actor_gpio_level(on, c->active_low));
+        r->driven = true;
+    }
     if (changed) {
         r->changed_us = esp_timer_get_time();
         ESP_LOGI(TAG, "%s: %s (%s)", c->id, on ? "ON" : "OFF", source);
