@@ -165,6 +165,7 @@ Base topic: `sensact/<device-id>/`. Retained where marked (R).
   - `status` and `show` (settings, with passwords hidden);
   - `set <key> <value>`, which validates and saves one setting;
   - `log`, `reboot` and `factory-reset`;
+  - `scan`, which runs the I2C bus scan (REQ-DET-1) and lists each device with its identification;
   - `net` (IP, gateway, DNS, access point) and `ping <ip>` for network diagnostics.
 
   It is used to set up the node and for bench tests.

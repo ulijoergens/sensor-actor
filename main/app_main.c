@@ -13,6 +13,7 @@
 
 #include "console.h"
 #include "sa_config.h"
+#include "sa_i2c.h"
 #include "sa_log.h"
 #include "sa_mqtt.h"
 #include "webui.h"
@@ -67,6 +68,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
+    sa_i2c_init();   // a bus error is logged; the node keeps running without sensors
     ESP_ERROR_CHECK(wifi_mgr_start());
     bool web_ok = webui_start() == ESP_OK;
     if (sa_mqtt_start() != ESP_OK) {

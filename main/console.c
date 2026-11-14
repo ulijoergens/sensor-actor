@@ -23,6 +23,7 @@
 #include "lwip/inet.h"
 #include "ping/ping_sock.h"
 #include "sa_config.h"
+#include "sa_i2c.h"
 #include "sa_log.h"
 #include "sa_mqtt.h"
 #include "wifi_mgr.h"
@@ -237,6 +238,22 @@ static int cmd_ping(int argc, char **argv)
     return 0;
 }
 
+static int cmd_scan(int argc, char **argv)
+{
+    sa_i2c_found_t f[16];
+    int n = sa_i2c_scan(f, 16);
+    const sa_device_cfg_t *c = sa_config_get();
+    printf("I2C bus (SDA %d, SCL %d): %d device(s)\n", c->i2c_sda, c->i2c_scl, n);
+    for (int i = 0; i < n && i < 16; i++) {
+        printf("  0x%02X  %-16s %-14s %s\n", f[i].addr, sa_chip_name(f[i].chip),
+               f[i].supported ? "supported" : "not supported", f[i].detail);
+    }
+    if (n == 0) {
+        printf("  nothing found: check wiring, power (3.3 V) and pull-up resistors\n");
+    }
+    return 0;
+}
+
 static int cmd_reboot(int argc, char **argv)
 {
     printf("rebooting\n");
@@ -265,6 +282,7 @@ void console_start(void)
         {.command = "show", .help = "Show settings (passwords hidden)", .func = cmd_show},
         {.command = "set", .help = "set <key> <value>: change and save one setting", .func = cmd_set},
         {.command = "log", .help = "Warnings and errors, newest first", .func = cmd_log},
+        {.command = "scan", .help = "Scan the I2C bus and identify sensors", .func = cmd_scan},
         {.command = "net", .help = "IP address, gateway, DNS and access point details", .func = cmd_net},
         {.command = "ping", .help = "ping <ip> [count]: check reachability from the device", .func = cmd_ping},
         {.command = "reboot", .help = "Restart the device", .func = cmd_reboot},

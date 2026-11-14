@@ -29,6 +29,7 @@ Not yet: sensors, actors, firmware upload.
 | `components/wifi_mgr/` | station mode with the reconnect schedule, access-point fallback |
 | `components/webui/` | HTTP server, REST API, single-page UI (`www/`) |
 | `components/sa_mqtt/` | MQTT client: status/last will, info, discovery, actor commands |
+| `components/sa_i2c/` | I2C bus and sensor detection (address + chip-ID register) |
 | `components/sa_log/` | ring buffer of warnings and errors for the Status page |
 | `components/rules/` | threshold rule engine (pure C) |
 | `components/*/test/` | Unity unit tests, collected by `test/unit` |
@@ -62,7 +63,7 @@ sa> set pass my-wifi-password
 sa> reboot
 ```
 
-Other console commands: `status`, `show`, `log`, `net`, `ping <ip>`, `factory-reset`, `help`.
+Other console commands: `status`, `show`, `log`, `scan` (I2C bus), `net`, `ping <ip>`, `factory-reset`, `help`.
 
 ## Tests
 
