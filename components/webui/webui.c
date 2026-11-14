@@ -11,6 +11,7 @@
 #include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "sa_captive.h"
 #include "sa_config.h"
 #include "sa_log.h"
 #include "sa_mqtt.h"
@@ -38,6 +39,9 @@ typedef struct {
 
 static esp_err_t send_asset(httpd_req_t *req)
 {
+    if (sa_captive_redirect(req)) {   // AP mode, request for a foreign host name
+        return ESP_OK;
+    }
     const asset_t *a = req->user_ctx;
     httpd_resp_set_type(req, a->type);
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
@@ -135,6 +139,7 @@ static esp_err_t api_status(httpd_req_t *req)
     cJSON_AddBoolToObject(wj, "ap_active", w.ap_active);
     cJSON_AddStringToObject(wj, "ap_ssid", w.ap_ssid);
     cJSON_AddStringToObject(wj, "ap_ip", w.ap_ip);
+    cJSON_AddBoolToObject(wj, "captive_portal", sa_captive_active());
     cJSON_AddNumberToObject(wj, "lost_for_s", w.lost_for_s);
     cJSON_AddNumberToObject(wj, "next_retry_s", w.next_retry_s);
     cJSON_AddNumberToObject(wj, "attempts", w.attempts);
@@ -386,6 +391,16 @@ void webui_register(httpd_handle_t srv, const httpd_uri_t *uri)
     }
 }
 
+// Unknown paths: in AP mode, connectivity checks (/generate_204, /hotspot-detect.html, ...)
+// are sent to the settings page; otherwise a normal 404.
+static esp_err_t not_found(httpd_req_t *req, httpd_err_code_t err)
+{
+    if (sa_captive_redirect(req)) {
+        return ESP_OK;
+    }
+    return httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
+}
+
 esp_err_t webui_start(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
@@ -420,6 +435,7 @@ esp_err_t webui_start(void)
     webui_register_actors(srv);
     webui_register_crash(srv);
     webui_register_ota(srv);
+    httpd_register_err_handler(srv, HTTPD_404_NOT_FOUND, not_found);
     ESP_LOGI(TAG, "web UI running on port %d (%d of %d URI handlers used)", cfg.server_port, s_handlers,
              cfg.max_uri_handlers);
     return ESP_OK;

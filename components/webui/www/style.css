@@ -64,3 +64,5 @@ table.rule select, table.rule input { width: 100%; }
 .state-ON { color: var(--ok); font-weight: 600; } .state-OFF { color: var(--muted); font-weight: 600; }
 progress { width: 100%; height: 14px; }
 code { font-size: 13px; }
+.banner { background: var(--panel); border: 1px solid var(--warn); border-left: 4px solid var(--warn); border-radius: 8px; padding: 10px 12px; margin: 0 0 14px; }
+.banner a { color: var(--accent); }

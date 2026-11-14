@@ -63,6 +63,7 @@ async function refreshHome() {
   const s = await api('status');
   header(s);
   const [w, wsub] = wifiText(s.wifi);
+  $('#h-ap-banner').hidden = !(s.wifi.ap_active && s.wifi.state !== 'connected');
   $('#h-wifi').textContent = w;
   $('#h-wifi-sub').textContent = wsub;
   const [m, msub] = mqttText(s.mqtt);

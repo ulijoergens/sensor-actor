@@ -44,6 +44,7 @@ Not yet: drivers for SHT2x/SHT3x/AHT20/BME280/VL53L0X.
 | `components/sa_i2c/` | I2C bus and sensor detection (address + chip-ID register) |
 | `components/sensors/` | sensor framework (storage, read task, median, MQTT) and drivers (VL53L1X, DS18B20 via espressif/onewire_bus + ds18b20) |
 | `components/sa_crash/` | crash report: core dump summary, download, erase |
+| `components/sa_captive/` | captive portal in AP mode: DNS server and redirect to Settings |
 | `components/sa_log/` | ring buffer of warnings and errors for the Status page |
 | `components/actors/` | GPIO relays, power-on state, rule evaluation, MQTT switch |
 | `components/rules/` | threshold rule engine (pure C) |
@@ -70,9 +71,8 @@ Every push to `main` is built by GitHub Actions (ESP-IDF v6.1, `.github/workflow
 ## First start
 
 Without WiFi settings the node opens the access point **SensAct-XXXX** (no password).
-1. Connect to it.
-2. Open http://192.168.4.1.
-3. Under *Settings*, enter your network and save. The node restarts and joins your network.
+1. Connect to it. Phones and laptops open the Settings page by themselves (captive portal); otherwise open http://192.168.4.1.
+2. Enter your network under *WiFi* and save. The node restarts and joins your network.
 
 Alternatively, use the serial console (115200 baud):
 

@@ -14,6 +14,7 @@
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
+#include "sa_captive.h"
 #include "sa_config.h"
 
 static const char *TAG = "wifi";
@@ -188,12 +189,18 @@ static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *da
         break;
     }
 
-    case WIFI_EVENT_AP_START:
+    case WIFI_EVENT_AP_START: {
         s_ap_active = true;
+        esp_netif_ip_info_t info;
+        if (esp_netif_get_ip_info(s_ap_netif, &info) == ESP_OK) {
+            sa_captive_start(info.ip.addr);   // REQ-WIFI-4: captive portal while the AP is up
+        }
         break;
+    }
 
     case WIFI_EVENT_AP_STOP:
         s_ap_active = false;
+        sa_captive_stop();
         break;
 
     case WIFI_EVENT_AP_STACONNECTED:
@@ -265,6 +272,11 @@ esp_err_t wifi_mgr_start(void)
 
     s_sta_netif = esp_netif_create_default_wifi_sta();
     s_ap_netif = esp_netif_create_default_wifi_ap();
+    // DHCP option 114 (RFC 8910): newer phones open the portal without probing first.
+    static char portal_uri[] = SA_CAPTIVE_URL;
+    esp_netif_dhcps_stop(s_ap_netif);
+    esp_netif_dhcps_option(s_ap_netif, ESP_NETIF_OP_SET, ESP_NETIF_CAPTIVEPORTAL_URI, portal_uri, strlen(portal_uri));
+    esp_netif_dhcps_start(s_ap_netif);
     char host[33];
     make_hostname(host, sizeof(host), cfg->name);
     esp_netif_set_hostname(s_sta_netif, host);
