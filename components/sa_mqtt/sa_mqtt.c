@@ -32,6 +32,7 @@ static char s_id[SA_ID_MAX + 1];
 static char s_status_topic[48];
 static bool s_logged_down;   // avoid one log line per reconnect attempt
 static bool s_running;       // client started (only while WiFi has an IP address)
+static volatile bool s_shutting_down;   // planned restart: disconnects are expected
 #define MAX_CONNECT_CB 4
 static void (*s_connect_cb[MAX_CONNECT_CB])(void);
 
@@ -298,7 +299,7 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
         s_st.connected = false;
         portEXIT_CRITICAL(&s_lock);
         esp_timer_stop(s_info_timer);
-        if (!s_logged_down) {
+        if (!s_logged_down && !s_shutting_down) {
             ESP_LOGW(TAG, "not connected to %s%s%s, retrying every 10 s", s_st.broker,
                      s_st.last_error[0] ? ": " : "", s_st.last_error);
             s_logged_down = true;
@@ -372,6 +373,11 @@ static void on_net_event(void *arg, esp_event_base_t base, int32_t id, void *dat
     }
 }
 
+static void on_shutdown(void)
+{
+    s_shutting_down = true;
+}
+
 // ---------------------------------------------------------------- start / status
 
 esp_err_t sa_mqtt_start(void)
@@ -383,6 +389,7 @@ esp_err_t sa_mqtt_start(void)
         return ESP_OK;
     }
     s_st.configured = true;
+    esp_register_shutdown_handler(on_shutdown);
     snprintf(s_st.broker, sizeof(s_st.broker), "%s:%u", c->mqtt_host, c->mqtt_port);
     sa_mqtt_topic(s_status_topic, sizeof(s_status_topic), s_id, "status");
 

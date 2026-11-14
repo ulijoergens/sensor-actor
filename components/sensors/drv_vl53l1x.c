@@ -173,7 +173,13 @@ esp_err_t vl53l1x_init(vl53l1x_t *s, i2c_master_bus_handle_t bus, uint8_t addr, 
         return ESP_ERR_TIMEOUT;
     }
 
-    err = wr(s, 0x2D, DEFAULT_CONFIG, sizeof(DEFAULT_CONFIG));
+    // After an ESP32 soft restart the sensor was not power-cycled and may still be ranging
+    // from the previous run: stop it and clear its interrupt before loading the
+    // configuration (ST's sequence assumes a freshly powered sensor).
+    err = wr8(s, REG_SYSTEM_MODE_START, 0x00);
+    if (err == ESP_OK) err = wr8(s, REG_SYSTEM_INTERRUPT_CLEAR, 0x01);
+    vTaskDelay(pdMS_TO_TICKS(10));
+    if (err == ESP_OK) err = wr(s, 0x2D, DEFAULT_CONFIG, sizeof(DEFAULT_CONFIG));
     // One measurement completes the VHV calibration (ULD SensorInit).
     if (err == ESP_OK) err = wr8(s, REG_SYSTEM_MODE_START, 0x40);
     if (err == ESP_OK) err = wait_ready(s, 1000);

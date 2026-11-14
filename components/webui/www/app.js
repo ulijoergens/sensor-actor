@@ -387,6 +387,17 @@ async function refreshStatus() {
     return tr;
   }));
 
+  const prev = l.previous || [];
+  $('#prev-info').textContent = prev.length
+    ? `The last ${prev.length} warnings/errors from earlier starts (this is start #${l.boot}).`
+    : `No stored warnings or errors from earlier starts (this is start #${l.boot}).`;
+  $('#prev-table').hidden = !prev.length;
+  $('#prev-body').replaceChildren(...prev.map((e) => el('tr', {},
+    el('td', { className: 'num' }, '#' + e.boot),
+    el('td', { className: 'num' }, e.time ? new Date(e.time * 1000).toLocaleString() : `${duration(e.uptime_s)} after start`),
+    el('td', { className: 'lvl-' + e.level }, e.level),
+    el('td', {}, e.text))));
+
   const body = $('#log-body');
   if (!l.entries.length) {
     const tr = document.createElement('tr');
@@ -513,6 +524,12 @@ $('#settings').addEventListener('submit', async (ev) => {
 $('#btn-reboot').addEventListener('click', async () => {
   if (!confirm('Restart the device?')) return;
   try { await api('reboot', {}); msg('Restarting…', 'ok'); waitForRestart(); } catch (e) { msg(e.message, 'err'); }
+});
+
+$('#btn-log-clear').addEventListener('click', async () => {
+  if (!confirm('Clear the stored log of earlier starts?')) return;
+  await fetch('/api/log', { method: 'DELETE' });
+  refreshStatus();
 });
 
 // ------------------------------------------------------------- shell

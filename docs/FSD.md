@@ -209,7 +209,7 @@ The UI is plain HTML, CSS and JavaScript, gzipped and built into the firmware so
 
 - **REQ-PER-1:** the configuration (device, network, sensors, actors, rules) is stored in NVS as versioned records. "Factory reset": hold BOOT for 10 s, or press the button in Settings.
 - **REQ-LOG-2:** after a crash or watchdog panic, a core dump (ELF) is kept in the `coredump` partition. On the next boot a one-line summary (task, PC, panic reason) goes into the error log; `GET /api/crash` returns the summary with the backtrace, `GET /api/crash/dump` downloads the dump, `DELETE /api/crash` erases it.
-- **REQ-LOG-1:** the error log is a RAM ring buffer of 100 entries (time, level, source, text). The last 20 warnings and errors are copied to flash so they survive a reboot. The time comes from SNTP, or from uptime while no time is available.
+- **REQ-LOG-1:** the error log is a RAM ring buffer of 100 entries (time, level, source, text). The last 20 warnings and errors are copied to flash (NVS namespace `salog`, kept on factory reset) so they survive a reboot or crash; each carries the boot number. Writes happen at most once per minute and only when something new was logged, plus right before a planned restart. A restart after a crash, watchdog or brownout is logged. `GET /api/log` returns `entries` (this boot) and `previous`; `DELETE /api/log` clears the stored entries. The time comes from SNTP, or from uptime while no time is available.
 
 ## 10. Testing (Universal-ESP32-Workbench)
 

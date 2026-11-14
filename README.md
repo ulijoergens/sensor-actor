@@ -19,7 +19,9 @@ Working:
 
 - firmware upload on the Settings page (OTA with image checks and automatic rollback), crash reports.
 
-Not yet: drivers for SHT2x/SHT3x/AHT20/BME280/VL53L0X/DS18B20, persistent error log.
+- error log: last 100 warnings/errors of the current start in RAM, last 20 of any start kept in flash (survives restarts and crashes).
+
+Not yet: drivers for SHT2x/SHT3x/AHT20/BME280/VL53L0X/DS18B20.
 
 - Specification: [docs/FSD.md](docs/FSD.md)
 - Sensors: VL53L0X / VL53L1X, SHT25, SHT35, AHT20, BME280 (I2C), DS18B20 (1-Wire)

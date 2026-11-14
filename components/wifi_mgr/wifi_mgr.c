@@ -150,7 +150,11 @@ static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *da
         int64_t now = esp_timer_get_time();
         bool just_lost = s_state == WIFI_MGR_CONNECTED;
         if (just_lost) {
-            ESP_LOGW(TAG, "connection to \"%s\" lost (reason %d)", s_ssid, d->reason);
+            if (d->reason == WIFI_REASON_ASSOC_LEAVE) {
+                ESP_LOGI(TAG, "left \"%s\" (restart or WiFi stopped)", s_ssid);
+            } else {
+                ESP_LOGW(TAG, "connection to \"%s\" lost (reason %d)", s_ssid, d->reason);
+            }
             portENTER_CRITICAL(&s_lock);
             s_lost_at_us = now;
             s_attempts = 0;

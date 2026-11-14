@@ -331,7 +331,36 @@ static esp_err_t api_log(httpd_req_t *req)
         cJSON_AddItemToArray(arr, it);
     }
     free(e);
+
+    // Stored entries from earlier boots (REQ-LOG-1)
+    cJSON_AddNumberToObject(root, "boot", sa_log_boot());
+    sa_log_persisted_t *p = malloc(sizeof(sa_log_persisted_t) * SA_LOG_PERSIST);
+    cJSON *prev = cJSON_AddArrayToObject(root, "previous");
+    if (p) {
+        int m = sa_log_get_previous(p, SA_LOG_PERSIST);
+        for (int i = 0; i < m; i++) {
+            cJSON *it = cJSON_CreateObject();
+            cJSON_AddNumberToObject(it, "boot", p[i].boot);
+            cJSON_AddNumberToObject(it, "uptime_s", p[i].uptime_s);
+            if (p[i].epoch_s) {
+                cJSON_AddNumberToObject(it, "time", p[i].epoch_s);
+            }
+            char lvl[2] = {p[i].level, 0};
+            cJSON_AddStringToObject(it, "level", lvl);
+            cJSON_AddStringToObject(it, "text", p[i].text);
+            cJSON_AddItemToArray(prev, it);
+        }
+        free(p);
+    }
     return webui_send_json(req, root);
+}
+
+static esp_err_t api_log_delete(httpd_req_t *req)
+{
+    sa_log_clear_persisted();
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", true);
+    return webui_send_json(req, o);
 }
 
 static esp_err_t api_reboot(httpd_req_t *req)
@@ -381,6 +410,7 @@ esp_err_t webui_start(void)
         {.uri = "/api/settings", .method = HTTP_GET, .handler = api_settings_get},
         {.uri = "/api/settings", .method = HTTP_POST, .handler = api_settings_post},
         {.uri = "/api/log", .method = HTTP_GET, .handler = api_log},
+        {.uri = "/api/log", .method = HTTP_DELETE, .handler = api_log_delete},
         {.uri = "/api/reboot", .method = HTTP_POST, .handler = api_reboot},
     };
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
