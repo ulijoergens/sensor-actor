@@ -274,6 +274,21 @@ static int cmd_crash_test(int argc, char **argv)
     return 0;
 }
 
+static int cmd_wifi_scan(int argc, char **argv)
+{
+    static wifi_mgr_net_t nets[30];
+    int n = wifi_mgr_scan(nets, 30);
+    if (n < 0) {
+        printf("scan not possible right now (WiFi is connecting)\n");
+        return 1;
+    }
+    for (int i = 0; i < n; i++) {
+        printf("%4d dBm  ch %2u  %s  %s\n", nets[i].rssi, nets[i].channel, nets[i].secured ? "secured" : "open   ", nets[i].ssid);
+    }
+    printf("%d network(s)\n", n);
+    return 0;
+}
+
 static int cmd_reboot(int argc, char **argv)
 {
     printf("rebooting\n");
@@ -303,6 +318,7 @@ void console_start(void)
         {.command = "set", .help = "set <key> <value>: change and save one setting", .func = cmd_set},
         {.command = "log", .help = "Warnings and errors, newest first", .func = cmd_log},
         {.command = "scan", .help = "Scan the I2C bus and identify sensors", .func = cmd_scan},
+        {.command = "wifi-scan", .help = "List WiFi networks in range", .func = cmd_wifi_scan},
         {.command = "net", .help = "IP address, gateway, DNS and access point details", .func = cmd_net},
         {.command = "ping", .help = "ping <ip> [count]: check reachability from the device", .func = cmd_ping},
         {.command = "reboot", .help = "Restart the device", .func = cmd_reboot},

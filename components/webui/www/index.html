@@ -44,8 +44,11 @@
           <small>1–8 characters a–z, 0–9, _ or -. Used in MQTT topics.</small></label>
       </fieldset>
       <fieldset><legend>WiFi</legend>
+        <div class="buttons"><button type="button" id="btn-wifi-scan">Find networks</button></div>
+        <p class="msg" id="wifi-scan-msg"></p>
+        <div class="netlist" id="wifi-list"></div>
         <label>Network (SSID) <input name="wifi_ssid" maxlength="32">
-          <small>Leave empty to run as access point only.</small></label>
+          <small>Pick a network above or type its name. Leave empty to run as access point only.</small></label>
         <label>Password <input name="wifi_pass" type="password" maxlength="64" data-secret="wifi_pass"></label>
         <label class="check"><input type="checkbox" name="wifi_pass_clear"> Remove stored password (open network)</label>
       </fieldset>

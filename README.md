@@ -72,7 +72,7 @@ Every push to `main` is built by GitHub Actions (ESP-IDF v6.1, `.github/workflow
 
 Without WiFi settings the node opens the access point **SensAct-XXXX** (no password).
 1. Connect to it. Phones and laptops open the Settings page by themselves (captive portal); otherwise open http://192.168.4.1.
-2. Enter your network under *WiFi* and save. The node restarts and joins your network.
+2. Pick your network from the list under *WiFi* (or type its name), enter the password and save. The node restarts and joins your network.
 
 Alternatively, use the serial console (115200 baud):
 
@@ -82,7 +82,7 @@ sa> set pass my-wifi-password
 sa> reboot
 ```
 
-Other console commands: `status`, `show`, `log`, `scan` (I2C bus), `net`, `ping <ip>`, `factory-reset`, `help`.
+Other console commands: `status`, `show`, `log`, `scan` (I2C/1-Wire sensors), `wifi-scan`, `net`, `ping <ip>`, `factory-reset`, `help`.
 
 ## Firmware update
 

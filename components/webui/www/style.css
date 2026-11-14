@@ -66,3 +66,7 @@ progress { width: 100%; height: 14px; }
 code { font-size: 13px; }
 .banner { background: var(--panel); border: 1px solid var(--warn); border-left: 4px solid var(--warn); border-radius: 8px; padding: 10px 12px; margin: 0 0 14px; }
 .banner a { color: var(--accent); }
+.netlist { display: grid; gap: 4px; }
+.netlist button { display: flex; justify-content: space-between; align-items: center; text-align: left; width: 100%; }
+.netlist button.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.netlist .sig { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; margin-left: 8px; }

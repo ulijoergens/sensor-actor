@@ -13,7 +13,9 @@
 #include "esp_netif.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
+#include <stdlib.h>
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "sa_captive.h"
 #include "sa_config.h"
 
@@ -116,7 +118,9 @@ static void start_ap(void)
     ap.ap.max_connection = 4;
     ap.ap.authmode = WIFI_AUTH_OPEN;
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(s_have_ssid ? WIFI_MODE_APSTA : WIFI_MODE_AP));
+    // Always AP+STA: the station interface is also needed to scan for networks on the
+    // Settings page (without credentials it stays idle).
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
     set_state(WIFI_MGR_AP);
     ESP_LOGW(TAG, "starting access point \"%s\" (http://192.168.4.1)", s_ap_ssid);
@@ -342,6 +346,76 @@ void wifi_mgr_get_status(wifi_mgr_status_t *out)
             snprintf(out->ap_ip, sizeof(out->ap_ip), IPSTR, IP2STR(&info.ip));
         }
     }
+}
+
+int wifi_mgr_scan(wifi_mgr_net_t *out, int max)
+{
+    static SemaphoreHandle_t mux;
+    if (!mux) {
+        mux = xSemaphoreCreateMutex();
+    }
+    if (xSemaphoreTake(mux, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return -1;   // another scan is running
+    }
+    wifi_scan_config_t sc = {
+        .show_hidden = false,
+        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+        .scan_time.active = {.min = 60, .max = 120},   // per channel: ~1.5 s for 13 channels
+    };
+    esp_err_t err = esp_wifi_scan_start(&sc, true);
+    if (err != ESP_OK) {
+        xSemaphoreGive(mux);
+        ESP_LOGI(TAG, "scan not possible now: %s", esp_err_to_name(err));
+        return -1;
+    }
+    uint16_t n = 0;
+    esp_wifi_scan_get_ap_num(&n);
+    wifi_ap_record_t *rec = n ? calloc(n, sizeof(*rec)) : NULL;
+    if (n && !rec) {
+        esp_wifi_clear_ap_list();
+        xSemaphoreGive(mux);
+        return -1;
+    }
+    if (rec) {
+        esp_wifi_scan_get_ap_records(&n, rec);
+    }
+    int m = 0;
+    for (int i = 0; i < n; i++) {
+        const char *ssid = (const char *)rec[i].ssid;
+        if (!ssid[0]) {
+            continue;
+        }
+        int k;
+        for (k = 0; k < m && strcmp(out[k].ssid, ssid) != 0; k++) {
+        }
+        if (k < m) {                       // same network seen on another access point
+            if (rec[i].rssi > out[k].rssi) {
+                out[k].rssi = rec[i].rssi;
+                out[k].channel = rec[i].primary;
+            }
+            continue;
+        }
+        if (m == max) {
+            continue;
+        }
+        strlcpy(out[m].ssid, ssid, sizeof(out[m].ssid));
+        out[m].rssi = rec[i].rssi;
+        out[m].channel = rec[i].primary;
+        out[m].secured = rec[i].authmode != WIFI_AUTH_OPEN;
+        m++;
+    }
+    free(rec);
+    xSemaphoreGive(mux);
+    for (int i = 1; i < m; i++) {          // sort by signal, strongest first
+        wifi_mgr_net_t t = out[i];
+        int j = i;
+        while (j > 0 && out[j - 1].rssi < t.rssi) {
+            out[j] = out[j - 1];
+            j--;
+        }
+        out[j] = t;
+    }
+    return m;
 }
 
 bool wifi_mgr_is_up(void)

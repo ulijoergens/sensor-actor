@@ -368,6 +368,31 @@ static esp_err_t api_log_delete(httpd_req_t *req)
     return webui_send_json(req, o);
 }
 
+static esp_err_t api_wifi_scan(httpd_req_t *req)
+{
+    wifi_mgr_net_t *nets = malloc(sizeof(wifi_mgr_net_t) * 30);
+    if (!nets) {
+        return webui_send_error(req, "500 Internal Server Error", "Out of memory");
+    }
+    int n = wifi_mgr_scan(nets, 30);
+    if (n < 0) {
+        free(nets);
+        return webui_send_error(req, "503 Service Unavailable", "Scanning is not possible right now (WiFi is connecting); try again in a few seconds");
+    }
+    cJSON *root = cJSON_CreateObject();
+    cJSON *arr = cJSON_AddArrayToObject(root, "networks");
+    for (int i = 0; i < n; i++) {
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddStringToObject(o, "ssid", nets[i].ssid);
+        cJSON_AddNumberToObject(o, "rssi", nets[i].rssi);
+        cJSON_AddNumberToObject(o, "channel", nets[i].channel);
+        cJSON_AddBoolToObject(o, "secured", nets[i].secured);
+        cJSON_AddItemToArray(arr, o);
+    }
+    free(nets);
+    return webui_send_json(req, root);
+}
+
 static esp_err_t api_reboot(httpd_req_t *req)
 {
     cJSON *o = cJSON_CreateObject();
@@ -427,6 +452,7 @@ esp_err_t webui_start(void)
         {.uri = "/api/log", .method = HTTP_GET, .handler = api_log},
         {.uri = "/api/log", .method = HTTP_DELETE, .handler = api_log_delete},
         {.uri = "/api/reboot", .method = HTTP_POST, .handler = api_reboot},
+        {.uri = "/api/wifi/scan", .method = HTTP_GET, .handler = api_wifi_scan},
     };
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
         webui_register(srv, &uris[i]);

@@ -469,6 +469,42 @@ $('#btn-ota').addEventListener('click', () => {
   xhr.send(file);
 });
 
+function signalText(rssi) {
+  const bars = rssi >= -55 ? '▂▄▆█' : rssi >= -67 ? '▂▄▆ ' : rssi >= -78 ? '▂▄  ' : '▂   ';
+  const word = rssi >= -55 ? 'excellent' : rssi >= -67 ? 'good' : rssi >= -78 ? 'fair' : 'weak';
+  return `${bars} ${rssi} dBm (${word})`;
+}
+
+async function scanWifi() {
+  const m = $('#wifi-scan-msg'), list = $('#wifi-list'), btn = $('#btn-wifi-scan');
+  btn.disabled = true; m.textContent = 'Searching for networks…'; m.className = 'msg';
+  try {
+    const { networks } = await api('wifi/scan');
+    const cur = $('#settings').wifi_ssid.value;
+    list.replaceChildren(...networks.map((n) => {
+      const b = el('button', { type: 'button', className: n.ssid === cur ? 'selected' : '' },
+        el('span', {}, (n.secured ? '🔒 ' : '') + n.ssid),
+        el('span', { className: 'sig' }, signalText(n.rssi)));
+      b.addEventListener('click', () => {
+        const f = $('#settings');
+        f.wifi_ssid.value = n.ssid;
+        for (const x of list.children) x.classList.toggle('selected', x === b);
+        if (n.secured) f.wifi_pass.focus();
+        m.textContent = n.secured ? `Selected "${n.ssid}". Enter its password below.` : `Selected "${n.ssid}" (open network).`;
+        m.className = 'msg ok';
+      });
+      return b;
+    }));
+    m.textContent = networks.length ? `${networks.length} network(s) found. Tap one to select it.` : 'No networks found.';
+  } catch (e) {
+    m.textContent = e.message; m.className = 'msg err';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$('#btn-wifi-scan').addEventListener('click', scanWifi);
+
 async function loadSettings() {
   const s = await api('settings');
   const f = $('#settings');
@@ -580,6 +616,8 @@ function show() {
     msg('');
     loadSettings().catch((e) => msg(e.message, 'err'));
     loadOta().catch((e) => otaMsg(e.message, 'err'));
+    // In access-point mode (first setup, captive portal) list the networks right away.
+    api('status').then((s) => { if (s.wifi.ap_active && s.wifi.state !== 'connected') scanWifi(); }).catch(() => {});
   }
 }
 

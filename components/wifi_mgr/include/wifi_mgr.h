@@ -58,6 +58,18 @@ esp_err_t wifi_mgr_start(void);
 
 void wifi_mgr_get_status(wifi_mgr_status_t *out);
 
+typedef struct {
+    char ssid[33];
+    int8_t rssi;            // dBm
+    uint8_t channel;
+    bool secured;           // needs a password
+} wifi_mgr_net_t;
+
+// Scans for networks (blocking, about 2 s). Duplicate SSIDs are merged (strongest kept),
+// hidden networks are skipped, the result is sorted by signal strength. Returns the
+// number of networks, or -1 if a scan is not possible right now (e.g. while connecting).
+int wifi_mgr_scan(wifi_mgr_net_t *out, int max);
+
 // true once the node is reachable: connected as station or access point up.
 bool wifi_mgr_is_up(void);
 

@@ -156,6 +156,7 @@ Base topic: `sensact/<device-id>/`. Retained where marked (R).
   3. then start **access-point mode**: SSID `SensAct-<last 4 hex digits of MAC>`, web UI at 192.168.4.1.
 - **REQ-WIFI-2 [PROPOSED]:** while in AP mode, the node retries the configured network every 15 min. On success it switches back to station mode.
 - **REQ-WIFI-3:** a node without WiFi credentials starts directly in AP mode.
+- **REQ-WIFI-5:** the Settings page lists the WiFi networks in range (signal strength, secured/open), sorted by signal; picking one fills in the SSID. In AP mode the list is loaded automatically. API: `GET /api/wifi/scan`; console: `wifi-scan`. The AP always runs as AP+STA so scanning is possible.
 - **REQ-WIFI-4:** while the AP is up, a captive portal opens the Settings page: a DNS server answers every A query with the AP address, requests for other host names and unknown paths are redirected to `http://192.168.4.1/#/settings`, and DHCP option 114 (RFC 8910) announces that URL.
 - **REQ-MQ-5:** the MQTT client runs only while WiFi has an IP address, and reconnects on its own (every 10 s) after WiFi or the broker returns. Each outage is logged once, with the reason. The broker IP and port are configurable; username and password are optional [PROPOSED].
 - **REQ-NET-1 [PROPOSED]:** the node is reachable by mDNS as `<device-name>.local`.
