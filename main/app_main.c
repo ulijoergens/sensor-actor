@@ -15,6 +15,7 @@
 #include "sa_config.h"
 #include "sa_i2c.h"
 #include "sa_log.h"
+#include "actors.h"
 #include "sa_mqtt.h"
 #include "sensors.h"
 #include "webui.h"
@@ -74,6 +75,9 @@ void app_main(void)
     bool web_ok = webui_start() == ESP_OK;
     if (sensors_init() != ESP_OK) {
         ESP_LOGE(TAG, "sensor task failed to start");
+    }
+    if (actors_init() != ESP_OK) {
+        ESP_LOGE(TAG, "actor task failed to start");
     }
     if (sa_mqtt_start() != ESP_OK) {
         ESP_LOGE(TAG, "MQTT client failed to start");

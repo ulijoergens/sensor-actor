@@ -49,6 +49,12 @@ static sa_sensor_cfg_t s_cfg[SA_MAX_SENSORS];
 static runtime_t s_rt[SA_MAX_SENSORS];
 static SemaphoreHandle_t s_mutex;
 static volatile bool s_announce_pending;
+static sa_sensor_value_cb_t s_value_cb;
+
+void sensors_set_value_callback(sa_sensor_value_cb_t cb)
+{
+    s_value_cb = cb;
+}
 
 static void lock(void) { xSemaphoreTakeRecursive(s_mutex, portMAX_DELAY); }
 static void unlock(void) { xSemaphoreGiveRecursive(s_mutex); }
@@ -162,7 +168,7 @@ static void announce(int i)
         quantity_label(name, sizeof(name), c, q);
         const char *dc = q == SA_Q_TEMPERATURE ? "temperature" : q == SA_Q_HUMIDITY ? "humidity"
                        : q == SA_Q_PRESSURE ? "pressure" : "distance";
-        char *txt = sa_mqtt_discovery_json(name, uid, sub, NULL, sa_quantity_unit(q), dc, "measurement", false);
+        char *txt = sa_mqtt_discovery_json(name, uid, sub, NULL, NULL, sa_quantity_unit(q), dc, "measurement", false);
         if (txt) {
             sa_mqtt_publish_topic(topic, txt, true);
             free(txt);
@@ -314,6 +320,11 @@ static void read_one(int i, int64_t now)
         if (!driver_init(i)) {
             if (before != r->state) {
                 ESP_LOGW(TAG, "%s: %s", c->id, r->error);
+                if (s_value_cb) {
+                    for (int k = 0; k < r->nq; k++) {
+                        s_value_cb(c->id, r->q[k], NAN, NAN, true);
+                    }
+                }
             }
             r->next_due_us = now + RETRY_INIT_US;
             if (r->state == SA_SENSOR_UNSUPPORTED) {
@@ -332,6 +343,11 @@ static void read_one(int i, int64_t now)
             r->state = SA_SENSOR_ERROR;
             ESP_LOGW(TAG, "%s: %d failed reads in a row: %s", c->id, r->fails, r->error);
             publish_values(i, false);
+            if (s_value_cb) {
+                for (int k = 0; k < r->nq; k++) {
+                    s_value_cb(c->id, r->q[k], NAN, NAN, true);
+                }
+            }
         }
         return;
     }
@@ -354,6 +370,11 @@ static void read_one(int i, int64_t now)
         }
     }
     publish_values(i, true);
+    if (s_value_cb) {
+        for (int k = 0; k < r->nq; k++) {
+            s_value_cb(c->id, r->q[k], r->last[k], sa_median(r->hist[k], r->hist_n[k]), false);
+        }
+    }
 }
 
 static void task(void *arg)
@@ -389,7 +410,7 @@ esp_err_t sensors_init(void)
         }
     }
     ESP_LOGI(TAG, "%d sensor(s) configured", n);
-    sa_mqtt_set_connect_handler(sensors_mqtt_announce);
+    sa_mqtt_add_connect_handler(sensors_mqtt_announce);
     return xTaskCreate(task, "sensors", 4096, NULL, 4, NULL) == pdPASS ? ESP_OK : ESP_FAIL;
 }
 

@@ -32,7 +32,8 @@ static char s_id[SA_ID_MAX + 1];
 static char s_status_topic[48];
 static bool s_logged_down;   // avoid one log line per reconnect attempt
 static bool s_running;       // client started (only while WiFi has an IP address)
-static void (*s_connect_cb)(void);
+#define MAX_CONNECT_CB 4
+static void (*s_connect_cb[MAX_CONNECT_CB])(void);
 
 // ---------------------------------------------------------------- pure helpers
 
@@ -105,9 +106,15 @@ bool sa_mqtt_connected(void)
     return s_st.connected;
 }
 
-void sa_mqtt_set_connect_handler(void (*cb)(void))
+void sa_mqtt_add_connect_handler(void (*cb)(void))
 {
-    s_connect_cb = cb;
+    for (int i = 0; i < MAX_CONNECT_CB; i++) {
+        if (!s_connect_cb[i]) {
+            s_connect_cb[i] = cb;
+            return;
+        }
+    }
+    ESP_LOGE(TAG, "too many connect handlers");
 }
 
 static void publish_info(void)
@@ -192,8 +199,9 @@ bool sa_mqtt_discovery_topic(char *topic, size_t len, const char *component, con
 }
 
 char *sa_mqtt_discovery_json(const char *name, const char *uid, const char *state_topic_sub,
-                             const char *value_template, const char *unit, const char *device_class,
-                             const char *state_class, bool diagnostic)
+                             const char *command_topic_sub, const char *value_template,
+                             const char *unit, const char *device_class, const char *state_class,
+                             bool diagnostic)
 {
     const sa_device_cfg_t *c = sa_config_get();
     char state_topic[96];
@@ -203,6 +211,15 @@ char *sa_mqtt_discovery_json(const char *name, const char *uid, const char *stat
     cJSON_AddStringToObject(o, "unique_id", uid);
     cJSON_AddStringToObject(o, "object_id", uid);
     cJSON_AddStringToObject(o, "state_topic", state_topic);
+    if (command_topic_sub) {
+        char cmd_topic[96];
+        sa_mqtt_topic(cmd_topic, sizeof(cmd_topic), c->id, command_topic_sub);
+        cJSON_AddStringToObject(o, "command_topic", cmd_topic);
+        cJSON_AddStringToObject(o, "payload_on", "ON");
+        cJSON_AddStringToObject(o, "payload_off", "OFF");
+        cJSON_AddStringToObject(o, "state_on", "ON");
+        cJSON_AddStringToObject(o, "state_off", "OFF");
+    }
     if (value_template) cJSON_AddStringToObject(o, "value_template", value_template);
     if (unit) cJSON_AddStringToObject(o, "unit_of_measurement", unit);
     if (device_class) cJSON_AddStringToObject(o, "device_class", device_class);
@@ -228,8 +245,8 @@ static void publish_discovery(void)
             sa_mqtt_publish_topic(topic, "", true);   // remove previously announced entities
             continue;
         }
-        char *txt = sa_mqtt_discovery_json(e->name, uid, "info", e->value_tpl, e->unit, e->dev_class,
-                                           NULL, true);
+        char *txt = sa_mqtt_discovery_json(e->name, uid, "info", NULL, e->value_tpl, e->unit,
+                                           e->dev_class, NULL, true);
         if (txt) {
             sa_mqtt_publish_topic(topic, txt, true);
             free(txt);
@@ -266,8 +283,8 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
         esp_mqtt_client_subscribe(ev->client, sub, 1);
         publish_discovery();
         publish_info();
-        if (s_connect_cb) {
-            s_connect_cb();
+        for (int i = 0; i < MAX_CONNECT_CB && s_connect_cb[i]; i++) {
+            s_connect_cb[i]();
         }
         esp_timer_stop(s_info_timer);
         esp_timer_start_periodic(s_info_timer, INFO_INTERVAL_US);

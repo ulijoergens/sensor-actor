@@ -2,7 +2,7 @@
 'use strict';
 
 const $ = (sel) => document.querySelector(sel);
-const PAGES = ['home', 'sensors', 'sensor', 'settings', 'status'];
+const PAGES = ['home', 'sensors', 'sensor', 'actors', 'actor', 'settings', 'status'];
 let timer = null;
 
 async function api(path, body) {
@@ -82,6 +82,14 @@ async function refreshHome() {
         el('div', { className: 'sub' }, q.valid ? `median ${fmt(q.median, q)}` : sn.state)));
     }
   }
+  const { actors } = await api('actors');
+  for (const a of actors.filter((x) => x.favourite)) {
+    const btn = el('button', { type: 'button', className: a.state === 'ON' ? 'switch-on' : '' }, a.state === 'ON' ? 'On' : 'Off');
+    btn.disabled = a.state === 'inactive';
+    btn.addEventListener('click', (ev) => { ev.preventDefault(); switchActor(a.id, 'TOGGLE').then(refreshHome); });
+    cards.push(el('a', { className: 'card', href: '#/actor/' + a.id },
+      el('h3', {}, a.label), el('div', { className: 'big state-' + a.state }, a.state), el('div', { className: 'sub' }, btn)));
+  }
   $('#h-favs').replaceChildren(...cards);
   $('#h-favs-empty').hidden = cards.length > 0;
 }
@@ -142,6 +150,150 @@ $('#btn-scan').addEventListener('click', async () => {
         el('td', {}, d.chip_name), el('td', { className: 'muted' }, d.detail), el('td', {}, action));
     }));
   } catch (e) { m.textContent = e.message; m.className = 'msg err'; }
+});
+
+// ---- actors
+
+function switchActor(id, state) {
+  return api('actors/' + id + '/set', { state }).catch((e) => alert(e.message));
+}
+
+async function refreshActors() {
+  const [s, { actors }] = await Promise.all([api('status'), api('actors')]);
+  header(s);
+  const rows = actors.map((a) => {
+    const btn = el('button', { type: 'button', className: a.state === 'ON' ? 'switch-on' : '' }, a.state === 'ON' ? 'On' : 'Off');
+    btn.disabled = a.state === 'inactive';
+    btn.addEventListener('click', () => switchActor(a.id, 'TOGGLE').then(refreshActors));
+    return el('tr', {},
+      el('td', {}, el('a', { href: '#/actor/' + a.id }, a.label), el('div', { className: 'sub' }, `${a.id} · GPIO ${a.gpio}${a.active_low ? ' · active low' : ''}`)),
+      el('td', { className: 'state-' + a.state }, a.state, el('div', { className: 'sub' }, a.state === 'inactive' ? '' : `by ${a.source}, ${duration(a.changed_s)} ago`)),
+      el('td', { className: 'sub' }, a.rule.enabled ? `${a.rule.status}: ${a.rule.text}` : '–'),
+      el('td', {}, btn));
+  });
+  if (!rows.length) rows.push(el('tr', {}, el('td', { colSpan: 4, className: 'muted' }, 'No actors yet. Add one below.')));
+  $('#actor-rows').replaceChildren(...rows);
+}
+
+$('#actor-add').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const m = $('#actor-add-msg');
+  try {
+    const r = await api('actors', { gpio: Number(ev.target.gpio.value) });
+    location.hash = '#/actor/' + r.id;
+  } catch (e) { m.textContent = e.message; m.className = 'msg err'; }
+});
+
+let currentActor = null;
+const ACTIONS = [['none', '–'], ['on', 'On'], ['off', 'Off']];
+
+function fillActions() {
+  for (const n of ['t0_rising', 't0_falling', 't1_rising', 't1_falling']) {
+    $('#actor-form')[n].replaceChildren(...ACTIONS.map(([v, t]) => el('option', { value: v }, t)));
+  }
+}
+fillActions();
+
+function rulePreview() {
+  const f = $('#actor-form');
+  if (!f.rule_enabled.checked) { $('#rule-preview').textContent = ''; return; }
+  const [sid, q] = (f.rule_q.value || '|').split('|');
+  const name = `${sid} ${q}`;
+  const th = [0, 1].filter((t) => f[`t${t}_enabled`].checked && f[`t${t}_value`].value !== '')
+    .map((t) => ({ v: Number(f[`t${t}_value`].value), r: f[`t${t}_rising`].value, fl: f[`t${t}_falling`].value }))
+    .sort((a, b) => a.v - b.v);
+  const parts = [];
+  for (const t of th) {
+    if (t.r !== 'none') parts.push(`${t.r.toUpperCase()} when ${name} rises above ${t.v}`);
+    if (t.fl !== 'none') parts.push(`${t.fl.toUpperCase()} when ${name} falls to ${t.v} or below`);
+  }
+  $('#rule-preview').textContent = parts.length ? 'Rule: ' + parts.join('; ') : 'Rule: no action yet – set at least one threshold action.';
+}
+
+function actorIdFromHash() {
+  return decodeURIComponent((location.hash.split('/')[2] || '').split('?')[0]);
+}
+
+async function loadActor() {
+  const [a, { sensors }] = await Promise.all([api('actors/' + actorIdFromHash()), api('sensors')]);
+  currentActor = a.id;
+  const f = $('#actor-form');
+  f.label.value = a.label; f.id.value = a.id; f.gpio.value = a.gpio;
+  f.active.checked = a.active; f.active_low.checked = a.active_low; f.favourite.checked = a.favourite;
+  f.power_on.value = a.power_on;
+  const r = a.rule;
+  const opts = [];
+  for (const sn of sensors) for (const q of sn.quantities) {
+    opts.push(el('option', { value: `${sn.id}|${q.name}` }, `${sn.label} – ${qtyName(q)} (${q.unit})`));
+  }
+  const cur = `${r.sensor}|${r.quantity}`;
+  if (r.sensor && !opts.some((o) => o.value === cur)) opts.push(el('option', { value: cur }, `${r.sensor} – ${r.quantity} (not found)`));
+  f.rule_q.replaceChildren(...opts);
+  if (r.sensor) f.rule_q.value = cur;
+  f.rule_enabled.checked = r.enabled; f.rule_source.value = r.source; f.rule_fault.value = r.fault;
+  r.thresholds.forEach((t, i) => {
+    f[`t${i}_enabled`].checked = t.enabled; f[`t${i}_value`].value = t.enabled || t.value ? t.value : '';
+    f[`t${i}_rising`].value = t.rising; f[`t${i}_falling`].value = t.falling;
+  });
+  $('#rule-fields').hidden = !r.enabled;
+  rulePreview();
+  showActorState(a);
+}
+
+function showActorState(a) {
+  $('#ad-title').textContent = a.label;
+  const st = $('#ad-state');
+  st.textContent = a.state; st.className = 'big state-' + a.state;
+  $('#ad-state-sub').textContent = a.state === 'inactive' ? 'pin floating' : `by ${a.source}, ${duration(a.changed_s)} ago · GPIO ${a.gpio} level ${a.gpio_level}`;
+  $('#ad-rule-status').textContent = a.rule.enabled ? a.rule.status : 'off';
+  $('#ad-rule-text').textContent = a.rule.enabled ? a.rule.text : 'No rule.';
+  for (const b of document.querySelectorAll('#page-actor [data-cmd]')) b.disabled = a.state === 'inactive';
+}
+
+async function refreshActor() {
+  if (currentActor) showActorState(await api('actors/' + currentActor));
+}
+
+for (const b of document.querySelectorAll('#page-actor [data-cmd]')) {
+  b.addEventListener('click', async () => {
+    try { showActorState(await api('actors/' + currentActor + '/set', { state: b.dataset.cmd })); } catch (e) { amsg(e.message, 'err'); }
+  });
+}
+
+$('#actor-form').addEventListener('input', rulePreview);
+$('#actor-form').rule_enabled.addEventListener('change', (ev) => { $('#rule-fields').hidden = !ev.target.checked; });
+
+function amsg(text, cls) { const m = $('#actor-msg'); m.textContent = text; m.className = 'msg ' + (cls || ''); }
+
+$('#actor-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target;
+  if (!f.checkValidity()) { f.reportValidity(); amsg('Please correct the highlighted fields.', 'err'); return; }
+  const [sid, q] = (f.rule_q.value || '|').split('|');
+  const body = {
+    label: f.label.value.trim(), id: f.id.value.trim(), gpio: Number(f.gpio.value),
+    active: f.active.checked, active_low: f.active_low.checked, favourite: f.favourite.checked, power_on: f.power_on.value,
+    rule: {
+      enabled: f.rule_enabled.checked, source: f.rule_source.value, fault: f.rule_fault.value,
+      thresholds: [0, 1].map((t) => ({
+        enabled: f[`t${t}_enabled`].checked, value: Number(f[`t${t}_value`].value || 0),
+        rising: f[`t${t}_rising`].value, falling: f[`t${t}_falling`].value,
+      })),
+    },
+  };
+  if (sid) { body.rule.sensor = sid; body.rule.quantity = q; }
+  try {
+    const a = await api('actors/' + currentActor, body);
+    amsg('Saved.', 'ok');
+    if (a.id !== currentActor) { location.hash = '#/actor/' + a.id; return; }
+    loadActor();
+  } catch (e) { amsg(e.message, 'err'); }
+});
+
+$('#btn-actor-delete').addEventListener('click', async () => {
+  if (!confirm(`Remove actor "${currentActor}"? Its pin is released.`)) return;
+  await fetch('/api/actors/' + currentActor, { method: 'DELETE' });
+  location.hash = '#/actors';
 });
 
 // ---- sensor detail
@@ -334,18 +486,25 @@ function show() {
   const page = (location.hash.replace(/^#\/?/, '') || 'home').split('/')[0];
   const name = PAGES.includes(page) ? page : 'home';
   for (const p of PAGES) $('#page-' + p).hidden = p !== name;
-  const navPage = name === 'sensor' ? 'sensors' : name;
+  const navPage = name === 'sensor' ? 'sensors' : name === 'actor' ? 'actors' : name;
   for (const a of document.querySelectorAll('nav a[data-page]')) a.classList.toggle('active', a.dataset.page === navPage);
 
   clearInterval(timer);
   currentSensor = null;
+  currentActor = null;
+  if (name === 'actor') {
+    amsg('');
+    loadActor().then(() => { timer = setInterval(() => refreshActor().catch(() => {}), 2000); })
+      .catch((e) => { $('#ad-title').textContent = 'Actor not found'; amsg(e.message, 'err'); });
+    return;
+  }
   if (name === 'sensor') {
     smsg('');
     loadSensor().then(() => { timer = setInterval(() => refreshSensor().catch(() => {}), 2000); })
       .catch((e) => { $('#sd-title').textContent = 'Sensor not found'; smsg(e.message, 'err'); });
     return;
   }
-  const refresh = { home: refreshHome, status: refreshStatus, sensors: refreshSensors }[name];
+  const refresh = { home: refreshHome, status: refreshStatus, sensors: refreshSensors, actors: refreshActors }[name];
   if (refresh) {
     const run = () => refresh().catch(() => { $('#hdr-dot').className = 'dot err'; });
     run();

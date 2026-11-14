@@ -181,7 +181,7 @@ The UI is plain HTML, CSS and JavaScript, gzipped and built into the firmware so
 | Sensors | list with value, status and an active toggle; "Scan bus" button; link to the detail page |
 | Sensor detail | type, bus address, parameters, label, ID, last value, median, favourite; all fields editable. API: `GET/POST /api/sensors`, `GET/POST/DELETE /api/sensors/<id>`, `GET /api/scan` |
 | Actors | list with state, active toggle and switch; "Add actor"; link to the detail page |
-| Actor detail | GPIO, label, ID, state, favourite, active-low, power-on state, fault action; rule editor (sensor + quantity, last or median, T1 and T2 each with rising and falling actions) with a plain-language summary; all fields editable |
+| Actor detail | API: `GET/POST /api/actors`, `GET/POST/DELETE /api/actors/<id>`, `POST /api/actors/<id>/set`. GPIO, label, ID, state, favourite, active-low, power-on state, fault action; rule editor (sensor + quantity, last or median, T1 and T2 each with rising and falling actions) with a plain-language summary; all fields editable |
 | Status | error log (newest first), WiFi (SSID, RSSI, IP, mode), MQTT (connected, broker, last error), uptime, firmware version, free heap |
 
 - **REQ-UI-1:** values refresh without reloading the page (polling every 2 s [PROPOSED]).

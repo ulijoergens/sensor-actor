@@ -12,7 +12,7 @@
   <nav>
     <a href="#/" data-page="home">Home</a>
     <a href="#/sensors" data-page="sensors">Sensors</a>
-    <a class="soon" title="Coming in a later version">Actors</a>
+    <a href="#/actors" data-page="actors">Actors</a>
     <a href="#/settings" data-page="settings">Settings</a>
     <a href="#/status" data-page="status">Status</a>
   </nav>
@@ -30,7 +30,7 @@
     </div>
     <h2>Favourites</h2>
     <div class="cards" id="h-favs"></div>
-    <p class="muted" id="h-favs-empty">Mark sensors as favourites on their detail page to show them here.</p>
+    <p class="muted" id="h-favs-empty">Mark sensors and actors as favourites on their detail page to show them here.</p>
   </section>
 
   <!-- Settings -->
@@ -122,6 +122,70 @@
       <div class="buttons">
         <button type="submit" class="primary">Save</button>
         <button type="button" id="btn-sensor-delete" class="danger">Remove sensor</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Actors -->
+  <section id="page-actors" hidden>
+    <h1>Actors</h1>
+    <table class="list"><thead><tr><th>Actor</th><th>State</th><th>Rule</th><th>Switch</th></tr></thead>
+      <tbody id="actor-rows"></tbody></table>
+    <h2>Add an actor</h2>
+    <form id="actor-add" class="inline" novalidate>
+      <label>GPIO <input name="gpio" type="number" min="0" max="33" required></label>
+      <button type="submit" class="primary">Add</button>
+    </form>
+    <p class="muted">Usable output pins: 2, 4, 5, 12–19, 21–23, 25–27, 32, 33 (minus the I2C and 1-Wire pins). Pins 0, 2, 5, 12 and 15 are strapping pins and may briefly change level at boot.</p>
+    <p class="msg" id="actor-add-msg"></p>
+  </section>
+
+  <!-- Actor detail -->
+  <section id="page-actor" hidden>
+    <p><a href="#/actors">← Actors</a></p>
+    <h1 id="ad-title">Actor</h1>
+    <div class="cards">
+      <div class="card"><h3>State</h3><div class="big" id="ad-state">–</div><div class="sub" id="ad-state-sub"></div>
+        <div class="buttons" style="margin-top:8px"><button type="button" data-cmd="ON">On</button><button type="button" data-cmd="OFF">Off</button><button type="button" data-cmd="TOGGLE">Toggle</button></div></div>
+      <div class="card"><h3>Rule</h3><div class="sub" id="ad-rule-status"></div><div id="ad-rule-text"></div></div>
+    </div>
+    <form id="actor-form" autocomplete="off" novalidate>
+      <fieldset><legend>Actor</legend>
+        <label>Label <input name="label" maxlength="32" required></label>
+        <label>ID <input name="id" maxlength="8" pattern="[a-z0-9_\-]{1,8}" required>
+          <small>1–8 characters a–z, 0–9, _ or -. Used in MQTT topics.</small></label>
+        <label>GPIO <input name="gpio" type="number" min="0" max="33" required></label>
+        <label class="check"><input type="checkbox" name="active"> Active (inactive: pin is left floating)</label>
+        <label class="check"><input type="checkbox" name="active_low"> Active low (relay switches on when the pin is LOW)</label>
+        <label class="check"><input type="checkbox" name="favourite"> Favourite (shown on Home)</label>
+        <label>After power-on
+          <select name="power_on"><option value="off">Off</option><option value="on">On</option><option value="last">Last state</option></select></label>
+      </fieldset>
+      <fieldset><legend>Rule</legend>
+        <label class="check"><input type="checkbox" name="rule_enabled"> Switch this actor automatically from a sensor value</label>
+        <div id="rule-fields">
+          <div class="row">
+            <label>Sensor value <select name="rule_q"></select></label>
+            <label>Use <select name="rule_source"><option value="median">Median</option><option value="last">Last value</option></select></label>
+            <label>If the sensor fails <select name="rule_fault"><option value="none">Keep state</option><option value="off">Switch off</option><option value="on">Switch on</option></select></label>
+          </div>
+          <table class="list rule">
+            <thead><tr><th></th><th>Threshold</th><th>When the value rises above it</th><th>When it falls to it or below</th></tr></thead>
+            <tbody>
+              <tr><td><label class="check"><input type="checkbox" name="t0_enabled"> T1</label></td><td><input name="t0_value" type="number" step="any"></td>
+                <td><select name="t0_rising"></select></td><td><select name="t0_falling"></select></td></tr>
+              <tr><td><label class="check"><input type="checkbox" name="t1_enabled"> T2</label></td><td><input name="t1_value" type="number" step="any"></td>
+                <td><select name="t1_rising"></select></td><td><select name="t1_falling"></select></td></tr>
+            </tbody>
+          </table>
+          <p class="muted" id="rule-preview"></p>
+          <p class="muted">Rules only act when the value crosses a threshold, so a manual switch stays until the next crossing. Example without flicker: T1 = 28 falling → On, T2 = 30 rising → Off.</p>
+        </div>
+      </fieldset>
+      <p class="msg" id="actor-msg"></p>
+      <div class="buttons">
+        <button type="submit" class="primary">Save</button>
+        <button type="button" id="btn-actor-delete" class="danger">Remove actor</button>
       </div>
     </form>
   </section>

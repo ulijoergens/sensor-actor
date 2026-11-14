@@ -57,17 +57,20 @@ bool sa_mqtt_discovery_topic(char *topic, size_t len, const char *component, con
                              char *uid, size_t uid_len);
 
 // Discovery config JSON (malloc'd, free with free()); NULL-able fields are omitted.
-// `state_topic_sub` is relative to sensact/<device-id>/.
+// `state_topic_sub` and `command_topic_sub` are relative to sensact/<device-id>/; with a
+// command topic, payload_on/payload_off are "ON"/"OFF" (switch).
 char *sa_mqtt_discovery_json(const char *name, const char *uid, const char *state_topic_sub,
-                             const char *value_template, const char *unit, const char *device_class,
-                             const char *state_class, bool diagnostic);
+                             const char *command_topic_sub, const char *value_template,
+                             const char *unit, const char *device_class, const char *state_class,
+                             bool diagnostic);
 
-// Called (MQTT task context) after each successful connection, after the device's own
-// status/info/discovery, so other modules can announce their entities.
-void sa_mqtt_set_connect_handler(void (*cb)(void));
+// Registers a function called (MQTT task context) after each successful connection, after
+// the device's own status/info/discovery, so other modules can announce their entities.
+// Handlers must not block or take module locks: hand the work to the module's own task.
+void sa_mqtt_add_connect_handler(void (*cb)(void));
 
-// Called for each command on sensact/<id>/actor/<aid>/set (MQTT task context).
-// Return false if the actor is unknown or inactive (the command is then logged).
+// Called for each command on sensact/<id>/actor/<aid>/set (MQTT task context). Must not
+// block or take module locks. Return false if the command was not accepted (it is logged).
 typedef bool (*sa_mqtt_command_cb_t)(const char *aid, const char *payload);
 void sa_mqtt_set_command_handler(sa_mqtt_command_cb_t cb);
 

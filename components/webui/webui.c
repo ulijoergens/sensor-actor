@@ -374,6 +374,7 @@ esp_err_t webui_start(void)
         ESP_ERROR_CHECK(httpd_register_uri_handler(srv, &uris[i]));
     }
     webui_register_sensors(srv);
+    webui_register_actors(srv);
     ESP_LOGI(TAG, "web UI running on port %d", cfg.server_port);
     return ESP_OK;
 }

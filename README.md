@@ -15,7 +15,9 @@ Working:
 
 - sensors: I2C scan, VL53L1X driver, per-sensor settings, median, error state, MQTT values and discovery, Sensors pages.
 
-Not yet: drivers for SHT2x/SHT3x/AHT20/BME280/VL53L0X/DS18B20, actors, firmware upload.
+- actors: GPIO relays (active low, power-on off/on/last, inactive = high-Z), two-threshold rules with start-up and fault behaviour, MQTT switch with discovery, Actors pages with rule editor.
+
+Not yet: drivers for SHT2x/SHT3x/AHT20/BME280/VL53L0X/DS18B20, firmware upload.
 
 - Specification: [docs/FSD.md](docs/FSD.md)
 - Sensors: VL53L0X / VL53L1X, SHT25, SHT35, AHT20, BME280 (I2C), DS18B20 (1-Wire)
@@ -34,6 +36,7 @@ Not yet: drivers for SHT2x/SHT3x/AHT20/BME280/VL53L0X/DS18B20, actors, firmware 
 | `components/sa_i2c/` | I2C bus and sensor detection (address + chip-ID register) |
 | `components/sensors/` | sensor framework (storage, read task, median, MQTT) and drivers (VL53L1X) |
 | `components/sa_log/` | ring buffer of warnings and errors for the Status page |
+| `components/actors/` | GPIO relays, power-on state, rule evaluation, MQTT switch |
 | `components/rules/` | threshold rule engine (pure C) |
 | `components/*/test/` | Unity unit tests, collected by `test/unit` |
 | `partitions.csv` | 4 MB layout: two OTA slots plus a storage partition |

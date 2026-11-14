@@ -109,6 +109,13 @@ typedef struct {
 } sa_scan_entry_t;
 int sensors_scan(sa_scan_entry_t *out, int max);
 
+// Called from the sensor task for every new valid sample of each quantity (fault=false),
+// and once when a sensor goes into error / is missing (fault=true, values unused). Must
+// not block or take locks that other tasks hold while waiting for the sensor module.
+typedef void (*sa_sensor_value_cb_t)(const char *sensor_id, sa_quantity_t q, float value,
+                                     float median, bool fault);
+void sensors_set_value_callback(sa_sensor_value_cb_t cb);
+
 // Request discovery + current values for all sensors (MQTT connect handler; done by the
 // sensor task).
 void sensors_mqtt_announce(void);

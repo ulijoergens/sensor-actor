@@ -56,3 +56,9 @@ table.list .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .state-starting, .state-unsupported, .state-inactive { color: var(--muted); }
 .stale { opacity: .5; }
 a.card { color: inherit; text-decoration: none; }
+form.inline { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+form.inline label { max-width: 120px; }
+.switch-on { background: var(--ok); border-color: var(--ok); color: #fff; }
+table.rule td { vertical-align: middle; }
+table.rule select, table.rule input { width: 100%; }
+.state-ON { color: var(--ok); font-weight: 600; } .state-OFF { color: var(--muted); font-weight: 600; }
