@@ -67,6 +67,9 @@ int sa_sensor_quantities(const sa_sensor_cfg_t *c, sa_quantity_t out[SA_MAX_QUAN
         out[n++] = SA_Q_HUMIDITY;
         out[n++] = SA_Q_PRESSURE;
         break;
+    case SA_CHIP_DS18B20:
+        out[n++] = SA_Q_TEMPERATURE;
+        break;
     case SA_CHIP_VL53L0X:
     case SA_CHIP_VL53L1X:
         out[n++] = SA_Q_DISTANCE;
@@ -80,16 +83,50 @@ int sa_sensor_quantities(const sa_sensor_cfg_t *c, sa_quantity_t out[SA_MAX_QUAN
     return n;
 }
 
-void sa_sensor_defaults(sa_sensor_cfg_t *c, uint8_t chip, uint8_t addr, int n)
+void sa_rom_to_str(uint64_t rom, char out[17])
+{
+    for (int i = 0; i < 8; i++) {   // byte 0 (family code) first
+        snprintf(out + 2 * i, 3, "%02X", (unsigned)((rom >> (8 * i)) & 0xFF));
+    }
+}
+
+bool sa_rom_from_str(const char *s, uint64_t *rom)
+{
+    if (strlen(s) != 16) {
+        return false;
+    }
+    uint64_t r = 0;
+    for (int i = 0; i < 8; i++) {
+        unsigned b;
+        char hex[3] = {s[2 * i], s[2 * i + 1], 0};
+        if (!isxdigit((unsigned char)hex[0]) || !isxdigit((unsigned char)hex[1]) || sscanf(hex, "%x", &b) != 1) {
+            return false;
+        }
+        r |= (uint64_t)b << (8 * i);
+    }
+    *rom = r;
+    return true;
+}
+
+void sa_sensor_defaults(sa_sensor_cfg_t *c, uint8_t chip, uint8_t addr, uint64_t rom, int n)
 {
     memset(c, 0, sizeof(*c));
     c->used = true;
     c->chip = chip;
     c->addr = addr;
     const char *base = (chip == SA_CHIP_VL53L0X || chip == SA_CHIP_VL53L1X) ? "dist"
+                     : chip == SA_CHIP_DS18B20 ? "temp"
                      : chip == SA_CHIP_BME280 ? "env" : "th";
     snprintf(c->id, sizeof(c->id), "%s%d", base, n);
-    snprintf(c->label, sizeof(c->label), "%s 0x%02X", sa_chip_name((sa_chip_t)chip), addr);
+    if (chip == SA_CHIP_DS18B20) {
+        char r[17];
+        sa_rom_to_str(rom, r);
+        c->rom = rom;
+        c->ds_resolution = 12;
+        snprintf(c->label, sizeof(c->label), "DS18B20 %.6s", r + 10);   // last bytes: serial + CRC
+    } else {
+        snprintf(c->label, sizeof(c->label), "%s 0x%02X", sa_chip_name((sa_chip_t)chip), addr);
+    }
     c->active = true;
     c->interval_s = 10;
     c->median_n = 15;
@@ -119,6 +156,14 @@ const char *sa_sensor_validate(const sa_sensor_cfg_t *c)
     for (int q = 0; q < SA_Q_COUNT; q++) {
         if (!isfinite(c->offset[q]) || fabsf(c->offset[q]) > 10000.0f) {
             return "Offset: a number between -10000 and 10000";
+        }
+    }
+    if (c->chip == SA_CHIP_DS18B20) {
+        if ((c->rom & 0xFF) != 0x28) {
+            return "1-Wire ROM code is not a DS18B20 (family 28)";
+        }
+        if (c->ds_resolution < 9 || c->ds_resolution > 12) {
+            return "Resolution: 9 to 12 bit";
         }
     }
     if (c->chip == SA_CHIP_VL53L0X || c->chip == SA_CHIP_VL53L1X) {

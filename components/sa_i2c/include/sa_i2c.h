@@ -24,6 +24,7 @@ typedef enum {
     SA_CHIP_BME680,        // unsupported
     SA_CHIP_VL53L0X,
     SA_CHIP_VL53L1X,
+    SA_CHIP_DS18B20,       // 1-Wire (identified by ROM code, not an I2C address)
 } sa_chip_t;
 
 typedef struct {

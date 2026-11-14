@@ -104,7 +104,7 @@ async function refreshSensors() {
       const first = i === 0;
       const tr = el('tr', { className: q.stale ? 'stale' : '' },
         el('td', {}, first ? el('a', { href: '#/sensor/' + sn.id }, sn.label) : '',
-           first ? el('div', { className: 'sub' }, `${sn.id} · ${sn.chip_name} 0x${sn.addr.toString(16)}`) : '',
+           first ? el('div', { className: 'sub' }, `${sn.id} · ${sn.chip_name} ${hwAddr(sn)}`) : '',
            q.name ? el('div', { className: 'sub' }, qtyName(q)) : ''),
         el('td', { className: 'num' }, q.valid ? fmt(q.value, q) : '–'),
         el('td', { className: 'num' }, q.valid ? fmt(q.median, q) : '–'),
@@ -115,6 +115,10 @@ async function refreshSensors() {
   }
   if (!rows.length) rows.push(el('tr', {}, el('td', { colSpan: 5, className: 'muted' }, 'No sensors yet. Use "Scan bus" below.')));
   $('#sensor-rows').replaceChildren(...rows);
+}
+
+function hwAddr(x) {
+  return x.bus === 'onewire' ? `1-Wire ${x.rom}` : `I2C 0x${x.addr.toString(16).padStart(2, '0')}`;
 }
 
 function activeToggle(sn) {
@@ -141,12 +145,12 @@ $('#btn-scan').addEventListener('click', async () => {
         action = el('button', { type: 'button', className: 'primary' }, 'Add');
         action.addEventListener('click', async () => {
           try {
-            const r = await api('sensors', { addr: d.addr, chip: d.chip });
+            const r = await api('sensors', d.bus === 'onewire' ? { chip: d.chip, rom: d.rom } : { addr: d.addr, chip: d.chip });
             location.hash = '#/sensor/' + r.id;
           } catch (e) { m.textContent = e.message; m.className = 'msg err'; }
         });
       }
-      return el('tr', {}, el('td', { className: 'num' }, '0x' + d.addr.toString(16).padStart(2, '0')),
+      return el('tr', {}, el('td', { className: 'num' }, hwAddr(d)),
         el('td', {}, d.chip_name), el('td', { className: 'muted' }, d.detail), el('td', {}, action));
     }));
   } catch (e) { m.textContent = e.message; m.className = 'msg err'; }
@@ -312,8 +316,10 @@ async function loadSensor() {
   f.active.checked = sn.active; f.favourite.checked = sn.favourite;
   f.interval_s.value = sn.interval_s; f.median_n.value = sn.median_n;
   $('#sd-vl').hidden = sn.vl_mode === undefined;
+  $('#sd-ds').hidden = sn.ds_resolution === undefined;
+  if (sn.ds_resolution !== undefined) f.ds_resolution.value = String(sn.ds_resolution);
   if (sn.vl_mode !== undefined) { f.vl_mode.value = sn.vl_mode; f.mount_mm.value = sn.mount_mm; }
-  $('#sd-hw').textContent = `${sn.chip_name} at I2C address 0x${sn.addr.toString(16).padStart(2, '0')}`;
+  $('#sd-hw').textContent = `${sn.chip_name} on ${hwAddr(sn)}`;
   $('#sd-offsets').replaceChildren(...sn.quantities.map((q) =>
     el('label', {}, `${qtyName(q)} (${q.unit})`,
       el('input', { type: 'number', step: 'any', name: 'off_' + q.name, value: sn.offsets[q.name] !== undefined ? sn.offsets[q.name] : 0 }))));
@@ -346,6 +352,7 @@ $('#sensor-form').addEventListener('submit', async (ev) => {
     interval_s: Number(f.interval_s.value), median_n: Number(f.median_n.value), offsets: {},
   };
   if (!$('#sd-vl').hidden) { body.vl_mode = f.vl_mode.value; body.mount_mm = Number(f.mount_mm.value || 0); }
+  if (!$('#sd-ds').hidden) body.ds_resolution = Number(f.ds_resolution.value);
   for (const inp of f.querySelectorAll('[name^=off_]')) body.offsets[inp.name.slice(4)] = Number(inp.value || 0);
   try {
     const sn = await api('sensors/' + currentSensor, body);

@@ -48,6 +48,7 @@ const char *sa_chip_name(sa_chip_t c)
     case SA_CHIP_BME680: return "BME680";
     case SA_CHIP_VL53L0X: return "VL53L0X";
     case SA_CHIP_VL53L1X: return "VL53L1X";
+    case SA_CHIP_DS18B20: return "DS18B20";
     default: return "unknown device";
     }
 }
@@ -77,6 +78,9 @@ static esp_err_t create_bus(void)
     };
     esp_err_t err = i2c_new_master_bus(&bc, &s_bus);
     if (err == ESP_OK) {
+        // Bus clear (up to 9 SCL pulses + STOP): a restart in the middle of a transfer
+        // leaves a slave holding SDA low, which made the first sensor init fail.
+        i2c_master_bus_reset(s_bus);
         ESP_LOGI(TAG, "bus on SDA %d, SCL %d", c->i2c_sda, c->i2c_scl);
     } else {
         ESP_LOGE(TAG, "bus init on SDA %d, SCL %d failed: %s", c->i2c_sda, c->i2c_scl, esp_err_to_name(err));

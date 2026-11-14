@@ -7,6 +7,8 @@
 #include <string.h>
 #include "driver/i2c_master.h"
 #include "drv_vl53l1x.h"
+#include "ds18b20.h"
+#include "onewire_bus.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -19,9 +21,9 @@ static const char *TAG = "sensors";
 
 #define NVS_NS         "sa"
 #define KEY_SENSORS    "sensors"
-#define STORE_VERSION  1
+#define STORE_VERSION  2          // 2: + rom, ds_resolution (v1 records are migrated)
 #define FAILS_TO_ERROR 3            // REQ-SEN-5
-#define RETRY_INIT_US  (30LL * 1000 * 1000)
+#define RETRY_INIT_US  (10LL * 1000 * 1000)   // retry interval for sensors that were never found
 #define RETRY_ERROR_US (10LL * 1000 * 1000)   // re-init interval while a sensor is in error
 
 typedef struct {
@@ -37,6 +39,7 @@ typedef struct {
     int64_t next_due_us;
     bool inited;
     vl53l1x_t vl;
+    ds18b20_device_handle_t ds;
     uint8_t nq;
     sa_quantity_t q[SA_MAX_QUANTITIES];
     float hist[SA_MAX_QUANTITIES][SA_MEDIAN_MAX];
@@ -88,30 +91,104 @@ static esp_err_t save(void)
     return err;
 }
 
+// Layout of version 1 records (before 1-Wire support), for migration.
+typedef struct {
+    bool used;
+    uint8_t chip;
+    uint8_t addr;
+    char id[SA_ID_MAX + 1];
+    char label[SA_NAME_MAX + 1];
+    bool active;
+    bool favourite;
+    uint16_t interval_s;
+    uint8_t median_n;
+    float offset[SA_Q_COUNT];
+    uint8_t vl_mode;
+    uint16_t mount_mm;
+} cfg_v1_t;
+
+typedef struct {
+    uint16_t version;
+    uint16_t size;
+    cfg_v1_t cfg[SA_MAX_SENSORS];
+} store_v1_t;
+
 static void load(void)
 {
     memset(s_cfg, 0, sizeof(s_cfg));
-    store_t *st = calloc(1, sizeof(store_t));
-    if (!st) {
+    nvs_handle_t h;
+    size_t len = 0;
+    if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) {
         return;
     }
-    nvs_handle_t h;
-    size_t len = sizeof(*st);
-    if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
-        esp_err_t err = nvs_get_blob(h, KEY_SENSORS, st, &len);
+    if (nvs_get_blob(h, KEY_SENSORS, NULL, &len) != ESP_OK) {
         nvs_close(h);
-        if (err == ESP_OK && len == sizeof(*st) && st->version == STORE_VERSION &&
-            st->size == sizeof(sa_sensor_cfg_t)) {
-            for (int i = 0; i < SA_MAX_SENSORS; i++) {
-                if (st->cfg[i].used && sa_sensor_validate(&st->cfg[i]) == NULL) {
-                    s_cfg[i] = st->cfg[i];
-                }
-            }
-        } else if (err == ESP_OK) {
-            ESP_LOGW(TAG, "stored sensor settings are from another version, ignored");
-        }
+        return;
     }
-    free(st);
+    void *blob = calloc(1, len);
+    if (!blob || nvs_get_blob(h, KEY_SENSORS, blob, &len) != ESP_OK) {
+        free(blob);
+        nvs_close(h);
+        return;
+    }
+    nvs_close(h);
+
+    const store_t *st = blob;
+    const store_v1_t *v1 = blob;
+    if (len == sizeof(store_t) && st->version == STORE_VERSION && st->size == sizeof(sa_sensor_cfg_t)) {
+        for (int i = 0; i < SA_MAX_SENSORS; i++) {
+            if (st->cfg[i].used && sa_sensor_validate(&st->cfg[i]) == NULL) {
+                s_cfg[i] = st->cfg[i];
+            }
+        }
+    } else if (len == sizeof(store_v1_t) && v1->version == 1 && v1->size == sizeof(cfg_v1_t)) {
+        for (int i = 0; i < SA_MAX_SENSORS; i++) {
+            const cfg_v1_t *o = &v1->cfg[i];
+            if (!o->used) {
+                continue;
+            }
+            sa_sensor_cfg_t *c = &s_cfg[i];
+            c->used = true;
+            c->chip = o->chip;
+            c->addr = o->addr;
+            memcpy(c->id, o->id, sizeof(c->id));
+            memcpy(c->label, o->label, sizeof(c->label));
+            c->active = o->active;
+            c->favourite = o->favourite;
+            c->interval_s = o->interval_s;
+            c->median_n = o->median_n;
+            memcpy(c->offset, o->offset, sizeof(c->offset));
+            c->vl_mode = o->vl_mode;
+            c->mount_mm = o->mount_mm;
+            c->ds_resolution = 12;
+            if (sa_sensor_validate(c) != NULL) {
+                memset(c, 0, sizeof(*c));
+            }
+        }
+        ESP_LOGI(TAG, "sensor settings migrated from version 1");
+        save();
+    } else {
+        ESP_LOGW(TAG, "stored sensor settings are from another version, ignored");
+    }
+    free(blob);
+}
+
+// ---------------------------------------------------------------- 1-Wire bus
+
+static onewire_bus_handle_t s_ow;
+
+static void onewire_init(void)
+{
+    const sa_device_cfg_t *c = sa_config_get();
+    onewire_bus_config_t bc = {.bus_gpio_num = c->onewire, .flags.en_pull_up = true};
+    onewire_bus_rmt_config_t rc = {.max_rx_bytes = 10};   // ROM (8) or scratchpad (9) + spare
+    esp_err_t err = onewire_new_bus_rmt(&bc, &rc, &s_ow);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "1-Wire bus on GPIO %d", c->onewire);
+    } else {
+        ESP_LOGE(TAG, "1-Wire bus on GPIO %d failed: %s", c->onewire, esp_err_to_name(err));
+        s_ow = NULL;
+    }
 }
 
 // ---------------------------------------------------------------- runtime helpers
@@ -121,6 +198,9 @@ static void reset_runtime(int i)
     runtime_t *r = &s_rt[i];
     if (r->inited && r->vl.dev) {
         vl53l1x_deinit(&r->vl);
+    }
+    if (r->ds) {
+        ds18b20_del_device(r->ds);
     }
     memset(r, 0, sizeof(*r));
     r->nq = sa_sensor_quantities(&s_cfg[i], r->q);
@@ -139,7 +219,7 @@ static int find(const char *id)
 
 static const char *fmt_for(sa_quantity_t q)
 {
-    return (q == SA_Q_DISTANCE || q == SA_Q_LEVEL) ? "%.0f" : "%.1f";
+    return (q == SA_Q_DISTANCE || q == SA_Q_LEVEL) ? "%.0f" : q == SA_Q_TEMPERATURE ? "%.2f" : "%.1f";
 }
 
 // ---------------------------------------------------------------- MQTT
@@ -254,14 +334,41 @@ static bool driver_init(int i)
 {
     const sa_sensor_cfg_t *c = &s_cfg[i];
     runtime_t *r = &s_rt[i];
-    i2c_master_bus_handle_t bus = sa_i2c_bus();
-    if (!bus) {
-        r->state = SA_SENSOR_MISSING;
-        strlcpy(r->error, "I2C bus not available", sizeof(r->error));
-        return false;
-    }
     switch ((sa_chip_t)c->chip) {
+    case SA_CHIP_DS18B20: {
+        if (!s_ow) {
+            r->state = SA_SENSOR_MISSING;
+            strlcpy(r->error, "1-Wire bus not available", sizeof(r->error));
+            return false;
+        }
+        onewire_device_t dev = {.bus = s_ow, .address = c->rom};
+        ds18b20_config_t dc = {};
+        esp_err_t err = ds18b20_new_device_from_enumeration(&dev, &dc, &r->ds);
+        if (err == ESP_OK) {
+            // Also the presence check: the first bus transaction fails if it is not there.
+            err = ds18b20_set_resolution(r->ds, (ds18b20_resolution_t)(c->ds_resolution - 9));
+        }
+        if (err != ESP_OK) {
+            if (r->ds) {
+                ds18b20_del_device(r->ds);
+                r->ds = NULL;
+            }
+            char rom[17];
+            sa_rom_to_str(c->rom, rom);
+            r->state = SA_SENSOR_MISSING;
+            snprintf(r->error, sizeof(r->error), "%s not answering (%s)", rom, esp_err_to_name(err));
+            return false;
+        }
+        r->inited = true;
+        return true;
+    }
     case SA_CHIP_VL53L1X: {
+        i2c_master_bus_handle_t bus = sa_i2c_bus();
+        if (!bus) {
+            r->state = SA_SENSOR_MISSING;
+            strlcpy(r->error, "I2C bus not available", sizeof(r->error));
+            return false;
+        }
         sa_i2c_lock();
         esp_err_t err = vl53l1x_init(&r->vl, bus, c->addr, c->vl_mode == 1 ? VL53L1X_SHORT : VL53L1X_LONG);
         if (err != ESP_OK) {
@@ -289,6 +396,23 @@ static bool driver_read(int i, float out[SA_MAX_QUANTITIES])
     const sa_sensor_cfg_t *c = &s_cfg[i];
     runtime_t *r = &s_rt[i];
     switch ((sa_chip_t)c->chip) {
+    case SA_CHIP_DS18B20: {
+        float t = NAN;
+        esp_err_t err = ds18b20_trigger_temperature_conversion(r->ds);   // waits for the conversion
+        if (err == ESP_OK) {
+            err = ds18b20_get_temperature(r->ds, &t);                   // scratchpad, CRC checked
+        }
+        if (err != ESP_OK) {
+            snprintf(r->error, sizeof(r->error), "read failed: %s", esp_err_to_name(err));
+            return false;
+        }
+        if (t < -55.0f || t > 125.0f) {
+            snprintf(r->error, sizeof(r->error), "implausible value %.1f °C", t);
+            return false;
+        }
+        out[0] = t + c->offset[SA_Q_TEMPERATURE];
+        return true;
+    }
     case SA_CHIP_VL53L1X: {
         uint16_t mm = 0;
         uint8_t st = 255;
@@ -354,13 +478,17 @@ static void read_one(int i, int64_t now)
         if (r->fails >= FAILS_TO_ERROR && r->state == SA_SENSOR_ERROR) {
             // Still failing: release and re-initialise the sensor (it may have been
             // unplugged and lost its configuration).
-            sa_i2c_lock();
+            if (r->ds) {
+                ds18b20_del_device(r->ds);
+                r->ds = NULL;
+            }
             if (r->vl.dev) {
+                sa_i2c_lock();
                 i2c_master_bus_rm_device(r->vl.dev);   // it does not answer: no stop command
                 r->vl.dev = NULL;
+                sa_i2c_recover();
+                sa_i2c_unlock();
             }
-            sa_i2c_recover();
-            sa_i2c_unlock();
             r->inited = false;
             r->next_due_us = now + RETRY_ERROR_US;
             return;
@@ -428,6 +556,7 @@ esp_err_t sensors_init(void)
 {
     s_mutex = xSemaphoreCreateRecursiveMutex();
     load();
+    onewire_init();
     int n = 0;
     for (int i = 0; i < SA_MAX_SENSORS; i++) {
         if (s_cfg[i].used) {
@@ -483,15 +612,17 @@ bool sensors_get(const char *id, sa_sensor_info_t *out)
     return i >= 0;
 }
 
-esp_err_t sensors_add(uint8_t chip, uint8_t addr, char id_out[SA_ID_MAX + 1], const char **why)
+esp_err_t sensors_add(uint8_t chip, uint8_t addr, uint64_t rom, char id_out[SA_ID_MAX + 1], const char **why)
 {
     *why = NULL;
+    const bool ow = chip == SA_CHIP_DS18B20;
     lock();
     int slot = -1;
     for (int i = 0; i < SA_MAX_SENSORS; i++) {
-        if (s_cfg[i].used && s_cfg[i].addr == addr) {
+        const bool other_ow = s_cfg[i].chip == SA_CHIP_DS18B20;
+        if (s_cfg[i].used && ow == other_ow && (ow ? s_cfg[i].rom == rom : s_cfg[i].addr == addr)) {
             unlock();
-            *why = "A sensor with this address is already configured";
+            *why = "This sensor is already configured";
             return ESP_ERR_INVALID_STATE;
         }
         if (!s_cfg[i].used && slot < 0) {
@@ -505,7 +636,7 @@ esp_err_t sensors_add(uint8_t chip, uint8_t addr, char id_out[SA_ID_MAX + 1], co
     }
     sa_sensor_cfg_t c;
     for (int n = 1; n < 100; n++) {
-        sa_sensor_defaults(&c, chip, addr, n);
+        sa_sensor_defaults(&c, chip, addr, rom, n);
         if (find(c.id) < 0) {
             break;
         }
@@ -516,7 +647,13 @@ esp_err_t sensors_add(uint8_t chip, uint8_t addr, char id_out[SA_ID_MAX + 1], co
     if (err == ESP_OK) {
         strlcpy(id_out, c.id, SA_ID_MAX + 1);
         announce(slot);
-        ESP_LOGI(TAG, "added %s (%s at 0x%02X)", c.id, sa_chip_name((sa_chip_t)chip), addr);
+        if (ow) {
+            char r[17];
+            sa_rom_to_str(rom, r);
+            ESP_LOGI(TAG, "added %s (DS18B20 %s)", c.id, r);
+        } else {
+            ESP_LOGI(TAG, "added %s (%s at 0x%02X)", c.id, sa_chip_name((sa_chip_t)chip), addr);
+        }
     } else {
         s_cfg[slot].used = false;
         *why = "Saving failed";
@@ -549,8 +686,9 @@ esp_err_t sensors_update(const char *id, const sa_sensor_cfg_t *in, const char *
     c.used = true;
     c.chip = old.chip;     // hardware identity is fixed
     c.addr = old.addr;
+    c.rom = old.rom;
 
-    bool reinit = c.vl_mode != old.vl_mode || c.active != old.active;
+    bool reinit = c.vl_mode != old.vl_mode || c.active != old.active || c.ds_resolution != old.ds_resolution;
     bool requant = c.mount_mm != old.mount_mm && (c.mount_mm == 0 || old.mount_mm == 0);
     bool renamed = strcmp(c.id, old.id) != 0;
     if (renamed || requant || !c.active) {
@@ -613,11 +751,36 @@ int sensors_scan(sa_scan_entry_t *out, int max)
         memset(e, 0, sizeof(*e));
         e->dev = found[k];
         for (int i = 0; i < SA_MAX_SENSORS; i++) {
-            if (s_cfg[i].used && s_cfg[i].addr == found[k].addr) {
+            if (s_cfg[i].used && s_cfg[i].chip != SA_CHIP_DS18B20 && s_cfg[i].addr == found[k].addr) {
                 e->configured = true;
                 strlcpy(e->sensor_id, s_cfg[i].id, sizeof(e->sensor_id));
             }
         }
+    }
+    // 1-Wire search (under the sensor lock: the sensor task uses the same bus)
+    onewire_device_iter_handle_t it = NULL;
+    if (s_ow && onewire_new_device_iter(s_ow, &it) == ESP_OK) {
+        onewire_device_t dev;
+        while (m < max && onewire_device_iter_get_next(it, &dev) == ESP_OK) {
+            sa_scan_entry_t *e = &out[m++];
+            memset(e, 0, sizeof(*e));
+            e->onewire = true;
+            e->rom = dev.address;
+            bool ds = (dev.address & 0xFF) == 0x28;
+            e->dev.chip = ds ? SA_CHIP_DS18B20 : SA_CHIP_UNKNOWN;
+            e->dev.supported = ds;
+            char r[17];
+            sa_rom_to_str(dev.address, r);
+            snprintf(e->dev.detail, sizeof(e->dev.detail), "1-Wire %s", r);
+            for (int i = 0; i < SA_MAX_SENSORS; i++) {
+                if (s_cfg[i].used && s_cfg[i].chip == SA_CHIP_DS18B20 && s_cfg[i].rom == dev.address) {
+                    e->configured = true;
+                    strlcpy(e->sensor_id, s_cfg[i].id, sizeof(e->sensor_id));
+                }
+            }
+            ESP_LOGI(TAG, "1-Wire: %s%s", r, ds ? " (DS18B20)" : "");
+        }
+        onewire_del_device_iter(it);
     }
     unlock();
     return m;

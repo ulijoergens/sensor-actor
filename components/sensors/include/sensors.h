@@ -56,7 +56,13 @@ typedef struct {
     float offset[SA_Q_COUNT];      // calibration per quantity
     uint8_t vl_mode;               // VL53Lx: 1 = short, 2 = long
     uint16_t mount_mm;             // VL53Lx: mounting height, 0 = no level quantity
+    uint64_t rom;                  // DS18B20: 1-Wire ROM code (addr unused)
+    uint8_t ds_resolution;         // DS18B20: 9..12 bit
 } sa_sensor_cfg_t;
+
+// 1-Wire ROM code as 16 hex characters, family code first ("28FF641E8216032B").
+void sa_rom_to_str(uint64_t rom, char out[17]);
+bool sa_rom_from_str(const char *s, uint64_t *rom);
 
 typedef struct {
     bool valid;                    // at least one valid sample
@@ -83,8 +89,9 @@ float sa_median(const float *v, int n);
 // Quantities a chip provides, given the configuration (level only with mount height).
 int sa_sensor_quantities(const sa_sensor_cfg_t *c, sa_quantity_t out[SA_MAX_QUANTITIES]);
 
-// Defaults for a newly found sensor; `n` makes the ID unique (e.g. "dist1").
-void sa_sensor_defaults(sa_sensor_cfg_t *c, uint8_t chip, uint8_t addr, int n);
+// Defaults for a newly found sensor; `n` makes the ID unique (e.g. "dist1", "temp1").
+// For a DS18B20 pass the ROM code (addr is ignored).
+void sa_sensor_defaults(sa_sensor_cfg_t *c, uint8_t chip, uint8_t addr, uint64_t rom, int n);
 
 // NULL if valid, else a message naming the field.
 const char *sa_sensor_validate(const sa_sensor_cfg_t *c);
@@ -95,15 +102,17 @@ esp_err_t sensors_init(void);      // load config, start the read task
 int sensors_list(sa_sensor_info_t *out, int max);
 bool sensors_get(const char *id, sa_sensor_info_t *out);
 
-// Add a sensor found by a scan. Fills `id_out` with the assigned ID.
-esp_err_t sensors_add(uint8_t chip, uint8_t addr, char id_out[SA_ID_MAX + 1], const char **why);
+// Add a sensor found by a scan (I2C: chip + addr; DS18B20: rom). Fills `id_out`.
+esp_err_t sensors_add(uint8_t chip, uint8_t addr, uint64_t rom, char id_out[SA_ID_MAX + 1], const char **why);
 // Replace the configuration of sensor `id` (the ID itself may change).
 esp_err_t sensors_update(const char *id, const sa_sensor_cfg_t *cfg, const char **why);
 esp_err_t sensors_remove(const char *id);
 
 // Scan the I2C bus; `configured` is set for devices that already have a sensor record.
 typedef struct {
-    sa_i2c_found_t dev;
+    sa_i2c_found_t dev;            // for 1-Wire devices: chip, supported and detail are set
+    bool onewire;
+    uint64_t rom;
     bool configured;
     char sensor_id[SA_ID_MAX + 1];
 } sa_scan_entry_t;

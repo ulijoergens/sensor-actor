@@ -21,7 +21,9 @@ Working:
 
 - error log: last 100 warnings/errors of the current start in RAM, last 20 of any start kept in flash (survives restarts and crashes).
 
-Not yet: drivers for SHT2x/SHT3x/AHT20/BME280/VL53L0X/DS18B20.
+- DS18B20 on 1-Wire (search, ROM codes, 9-12 bit resolution).
+
+Not yet: drivers for SHT2x/SHT3x/AHT20/BME280/VL53L0X.
 
 - Specification: [docs/FSD.md](docs/FSD.md)
 - Sensors: VL53L0X / VL53L1X, SHT25, SHT35, AHT20, BME280 (I2C), DS18B20 (1-Wire)
@@ -38,7 +40,7 @@ Not yet: drivers for SHT2x/SHT3x/AHT20/BME280/VL53L0X/DS18B20.
 | `components/webui/` | HTTP server, REST API, single-page UI (`www/`) |
 | `components/sa_mqtt/` | MQTT client: status/last will, info, discovery, actor commands |
 | `components/sa_i2c/` | I2C bus and sensor detection (address + chip-ID register) |
-| `components/sensors/` | sensor framework (storage, read task, median, MQTT) and drivers (VL53L1X) |
+| `components/sensors/` | sensor framework (storage, read task, median, MQTT) and drivers (VL53L1X, DS18B20 via espressif/onewire_bus + ds18b20) |
 | `components/sa_crash/` | crash report: core dump summary, download, erase |
 | `components/sa_log/` | ring buffer of warnings and errors for the Status page |
 | `components/actors/` | GPIO relays, power-on state, rule evaluation, MQTT switch |
