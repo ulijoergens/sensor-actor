@@ -42,8 +42,8 @@ LIP_FIT = 0.2         # clearance between lip and walls (press fit)
 LEDGE_D = 3.0         # how far the end ledges reach under the board
 LEDGE_SIDE = 3.5      # ledges stop this far from the long edges (header solder joints)
 
-USB_W = 12.0          # opening for a micro/USB-C plug with overmould
-USB_BELOW = 2.0       # opening starts this far below the top of the board
+USB_W = 16.0          # opening for a micro/USB-C plug with overmould (12 mm was too tight)
+USB_BELOW = 4.5       # opening starts this far below the top of the board (room for the plug sleeve)
 
 WIN_L = 9.0           # window over the USB end (EN/BOOT, LED), from the board end
 WIN_W = 18.0          # window width (between the header slots)

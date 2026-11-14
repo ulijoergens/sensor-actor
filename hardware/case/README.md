@@ -5,7 +5,7 @@ header pins pointing up, so Dupont wires plug in through the lid.
 
 | File | Part | Print orientation |
 |---|---|---|
-| `case_base.stl` | tray with ledges under the board ends, USB opening, two screw tabs (Ø 4.2 mm) | bottom down |
+| `case_base.stl` | tray with ledges under the board ends, 16 mm USB opening, two screw tabs (Ø 4.2 mm) | bottom down |
 | `case_lid.stl` | push-in lid: slots over both header rows, window over EN/BOOT/LED, vent slots | top down (as exported) |
 
 Outside 60.2 × 33.4 × 14.6 mm, 78.2 mm long with the tabs. PLA or PETG, 0.2 mm layers, 3 perimeters,
