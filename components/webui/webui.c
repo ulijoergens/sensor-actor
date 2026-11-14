@@ -345,13 +345,26 @@ static esp_err_t api_reboot(httpd_req_t *req)
 
 // ---------------------------------------------------------------- server
 
+static int s_handlers;
+
+void webui_register(httpd_handle_t srv, const httpd_uri_t *uri)
+{
+    esp_err_t err = httpd_register_uri_handler(srv, uri);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "cannot register %s %s: %s", http_method_str(uri->method), uri->uri, esp_err_to_name(err));
+    } else {
+        s_handlers++;
+    }
+}
+
 esp_err_t webui_start(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
-    cfg.max_uri_handlers = 24;
+    cfg.max_uri_handlers = 32;
     cfg.uri_match_fn = httpd_uri_match_wildcard;
     cfg.stack_size = 8192;
     cfg.lru_purge_enable = true;
+    cfg.recv_wait_timeout = 15;   // firmware uploads over WiFi can stall briefly
 
     httpd_handle_t srv = NULL;
     esp_err_t err = httpd_start(&srv, &cfg);
@@ -371,11 +384,13 @@ esp_err_t webui_start(void)
         {.uri = "/api/reboot", .method = HTTP_POST, .handler = api_reboot},
     };
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
-        ESP_ERROR_CHECK(httpd_register_uri_handler(srv, &uris[i]));
+        webui_register(srv, &uris[i]);
     }
     webui_register_sensors(srv);
     webui_register_actors(srv);
     webui_register_crash(srv);
-    ESP_LOGI(TAG, "web UI running on port %d", cfg.server_port);
+    webui_register_ota(srv);
+    ESP_LOGI(TAG, "web UI running on port %d (%d of %d URI handlers used)", cfg.server_port, s_handlers,
+             cfg.max_uri_handlers);
     return ESP_OK;
 }

@@ -10,3 +10,5 @@ test/unit/sdkconfig
 test/unit/sdkconfig.old
 test/unit/managed_components/
 build-test/
+build-broken/
+build-old/

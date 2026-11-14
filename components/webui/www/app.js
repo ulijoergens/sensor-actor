@@ -408,6 +408,48 @@ async function refreshStatus() {
   }));
 }
 
+async function loadOta() {
+  const o = await api('ota');
+  const slot = (s) => s && s.version ? `${s.version} (${s.label}, built ${s.built}${s.state ? ', ' + s.state : ''})` : '–';
+  const rows = [['Running', slot(o.running)], ['Other slot', slot(o.other)]];
+  if (o.last_invalid) rows.push(['Last rejected firmware', slot(o.last_invalid)]);
+  rows.push(['Maximum size', `${(o.max_size / 1024).toFixed(0)} KB`]);
+  $('#ota-table').replaceChildren(...rows.map(([k, v]) => el('tr', {}, el('th', {}, k), el('td', {}, v))));
+  return o;
+}
+
+function otaMsg(text, cls) { const m = $('#ota-msg'); m.textContent = text; m.className = 'msg ' + (cls || ''); }
+
+$('#btn-ota').addEventListener('click', () => {
+  const file = $('#ota-file').files[0];
+  if (!file) { otaMsg('Choose the firmware file first.', 'err'); return; }
+  if (!confirm(`Install ${file.name} (${(file.size / 1024).toFixed(0)} KB) and restart the node?`)) return;
+  const btn = $('#btn-ota'), bar = $('#ota-progress');
+  btn.disabled = true; bar.hidden = false; bar.value = 0;
+  otaMsg('Uploading…');
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/ota');
+  xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) bar.value = (100 * e.loaded) / e.total; };
+  xhr.onload = async () => {
+    let r = {};
+    try { r = JSON.parse(xhr.responseText); } catch (e) { /* ignore */ }
+    if (xhr.status !== 200) { otaMsg(r.error || `Upload failed (HTTP ${xhr.status})`, 'err'); btn.disabled = false; bar.hidden = true; return; }
+    otaMsg(`Firmware ${r.version} installed. Restarting…`, 'ok');
+    for (let i = 0; i < 60; i++) {
+      await new Promise((res) => setTimeout(res, 2000));
+      try {
+        const o = await loadOta();
+        if (o.running.version === r.version) { otaMsg(`Running firmware ${r.version} now.`, 'ok'); break; }
+        if (i > 15) { otaMsg(`The node is back but runs ${o.running.version}: the new firmware was rolled back.`, 'err'); break; }
+      } catch (e) { /* still restarting */ }
+    }
+    btn.disabled = false; bar.hidden = true;
+  };
+  xhr.onerror = () => { otaMsg('Upload failed: connection lost.', 'err'); btn.disabled = false; bar.hidden = true; };
+  xhr.send(file);
+});
+
 async function loadSettings() {
   const s = await api('settings');
   const f = $('#settings');
@@ -512,6 +554,7 @@ function show() {
   } else {
     msg('');
     loadSettings().catch((e) => msg(e.message, 'err'));
+    loadOta().catch((e) => otaMsg(e.message, 'err'));
   }
 }
 

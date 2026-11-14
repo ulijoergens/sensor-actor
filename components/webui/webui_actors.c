@@ -283,6 +283,6 @@ void webui_register_actors(httpd_handle_t srv)
         {.uri = "/api/actors/*", .method = HTTP_DELETE, .handler = api_actor_delete},
     };
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
-        ESP_ERROR_CHECK(httpd_register_uri_handler(srv, &uris[i]));
+        webui_register(srv, &uris[i]);
     }
 }

@@ -190,7 +190,7 @@ The UI is plain HTML, CSS and JavaScript, gzipped and built into the firmware so
 
 ## 8. OTA
 
-- **REQ-OTA-1:** a firmware image uploaded in Settings is written to the inactive OTA slot and checked, and the node reboots into it.
+- **REQ-OTA-1:** a firmware image uploaded in Settings (`POST /api/ota`, raw image) is written to the inactive OTA slot and checked: ESP32 application header, same project name, ESP-IDF image validation (checksum, SHA-256). The node then reboots into it. `GET /api/ota` shows both slots with version, build time and state.
 - **REQ-OTA-2:** the new image must confirm it works within 60 s of boot: WiFi or AP up, and the web server running. Otherwise the bootloader rolls back to the previous image.
 
 ### 8.1 Partition table for 4 MB flash [PROPOSED]

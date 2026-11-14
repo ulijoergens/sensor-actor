@@ -1,0 +1,11 @@
+menu "Sensor-Actor test options"
+
+    config SA_TEST_BROKEN_FIRMWARE
+        bool "Test only: firmware that fails its self-check"
+        default n
+        help
+            Builds a firmware that restarts 5 s after boot without confirming itself.
+            Installed via OTA, the bootloader must roll back to the previous firmware.
+            Used to test REQ-OTA-2; never enable in a real build.
+
+endmenu

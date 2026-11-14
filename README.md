@@ -17,7 +17,9 @@ Working:
 
 - actors: GPIO relays (active low, power-on off/on/last, inactive = high-Z), two-threshold rules with start-up and fault behaviour, MQTT switch with discovery, Actors pages with rule editor.
 
-Not yet: drivers for SHT2x/SHT3x/AHT20/BME280/VL53L0X/DS18B20, firmware upload.
+- firmware upload on the Settings page (OTA with image checks and automatic rollback), crash reports.
+
+Not yet: drivers for SHT2x/SHT3x/AHT20/BME280/VL53L0X/DS18B20, persistent error log.
 
 - Specification: [docs/FSD.md](docs/FSD.md)
 - Sensors: VL53L0X / VL53L1X, SHT25, SHT35, AHT20, BME280 (I2C), DS18B20 (1-Wire)
@@ -71,6 +73,16 @@ sa> reboot
 ```
 
 Other console commands: `status`, `show`, `log`, `scan` (I2C bus), `net`, `ping <ip>`, `factory-reset`, `help`.
+
+## Firmware update
+
+Settings → *Firmware update*: choose `build/sensor-actor.bin` and click *Upload and install*. From a script:
+
+```sh
+curl --data-binary @build/sensor-actor.bin -H 'Content-Type: application/octet-stream' http://<device>/api/ota
+```
+
+The image must be an ESP32 application of this project and pass ESP-IDF's checksum/SHA-256 validation. The new firmware has 60 s after boot to bring up WiFi (or the access point) and the web server; otherwise the bootloader returns to the previous firmware. `sdkconfig.test-broken` builds a firmware that deliberately fails this self-check, to test the rollback.
 
 ## Crash reports
 

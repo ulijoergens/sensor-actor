@@ -62,3 +62,5 @@ form.inline label { max-width: 120px; }
 table.rule td { vertical-align: middle; }
 table.rule select, table.rule input { width: 100%; }
 .state-ON { color: var(--ok); font-weight: 600; } .state-OFF { color: var(--muted); font-weight: 600; }
+progress { width: 100%; height: 14px; }
+code { font-size: 13px; }

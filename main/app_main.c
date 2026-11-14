@@ -1,5 +1,6 @@
 // Sensor-Actor node: entry point. See docs/FSD.md for the requirements.
 #include <stdio.h>
+#include "sdkconfig.h"
 #include "esp_app_desc.h"
 #include "esp_event.h"
 #include "esp_log.h"
@@ -42,6 +43,11 @@ static void init_nvs(void)
 // rolls back to the previous image.
 static void confirm_ota_image(bool web_ok)
 {
+#ifdef CONFIG_SA_TEST_BROKEN_FIRMWARE
+    ESP_LOGE(TAG, "TEST BUILD: simulating a failed self-check, restarting without confirming");
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    esp_restart();
+#endif
     esp_ota_img_states_t st;
     const esp_partition_t *running = esp_ota_get_running_partition();
     if (esp_ota_get_state_partition(running, &st) != ESP_OK || st != ESP_OTA_IMG_PENDING_VERIFY) {
