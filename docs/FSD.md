@@ -45,6 +45,7 @@ The node is ESP-IDF firmware for a plain ESP32 (4 MB flash). It:
   | VL53L1X | 0x29 | model ID register 0x010F = 0xEA |
   | DS18B20 | 1-Wire ROM | family code 0x28 |
 
+- **REQ-DET-3:** every scan also checks the bus lines electrically: idle level of SDA, SCL and the 1-Wire line with the internal pull-up on and briefly off, with a plain-language verdict (pull-up present / no external pull-up / held low). Shown when a scan finds nothing; console command `pins`.
 - **REQ-DET-2:** found devices that are not yet configured are offered for adding. Configured sensors that are not found are shown as "missing".
 - ⚠ **VL53L0X and VL53L1X both use address 0x29.** Only one of them can sit on the bus unless the others are held off with their XSHUT pins and given new addresses at boot.
 

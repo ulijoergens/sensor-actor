@@ -31,6 +31,19 @@ const char *sa_sensor_state_name(sa_sensor_state_t s)
     }
 }
 
+const char *sa_line_verdict(int level_pullup, int level_float, bool *ok)
+{
+    *ok = false;
+    if (!level_pullup) {
+        return "held low: short to GND, a connected but unpowered sensor, or a stuck device";
+    }
+    if (level_float) {
+        *ok = true;
+        return "pull-up present: a powered sensor module is probably connected";
+    }
+    return "no external pull-up: nothing connected, or the module has no pull-up / no power";
+}
+
 float sa_median(const float *v, int n)
 {
     float tmp[SA_MEDIAN_MAX];

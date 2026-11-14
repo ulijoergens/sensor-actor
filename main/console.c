@@ -26,6 +26,7 @@
 #include "sa_config.h"
 #include "sa_i2c.h"
 #include "sa_log.h"
+#include "sensors.h"
 #include "sa_mqtt.h"
 #include "wifi_mgr.h"
 
@@ -274,6 +275,17 @@ static int cmd_crash_test(int argc, char **argv)
     return 0;
 }
 
+static int cmd_pins(int argc, char **argv)
+{
+    sa_line_check_t lc[3];
+    int n = sensors_line_check(lc);
+    for (int i = 0; i < n; i++) {
+        printf("%-7s GPIO %-2d  pull-up on: %s  off: %s  -> %s\n", lc[i].name, lc[i].gpio,
+               lc[i].level_pullup ? "high" : "LOW ", lc[i].level_float ? "high" : "LOW ", lc[i].verdict);
+    }
+    return 0;
+}
+
 static int cmd_wifi_scan(int argc, char **argv)
 {
     static wifi_mgr_net_t nets[30];
@@ -318,6 +330,7 @@ void console_start(void)
         {.command = "set", .help = "set <key> <value>: change and save one setting", .func = cmd_set},
         {.command = "log", .help = "Warnings and errors, newest first", .func = cmd_log},
         {.command = "scan", .help = "Scan the I2C bus and identify sensors", .func = cmd_scan},
+        {.command = "pins", .help = "Check the bus lines (SDA, SCL, 1-Wire) electrically", .func = cmd_pins},
         {.command = "wifi-scan", .help = "List WiFi networks in range", .func = cmd_wifi_scan},
         {.command = "net", .help = "IP address, gateway, DNS and access point details", .func = cmd_net},
         {.command = "ping", .help = "ping <ip> [count]: check reachability from the device", .func = cmd_ping},

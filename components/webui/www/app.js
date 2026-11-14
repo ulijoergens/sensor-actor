@@ -135,8 +135,12 @@ $('#btn-scan').addEventListener('click', async () => {
   const m = $('#scan-msg');
   m.textContent = 'Scanning…'; m.className = 'msg';
   try {
-    const { devices } = await api('scan');
-    m.textContent = devices.length ? `${devices.length} device(s) found.` : 'Nothing found: check wiring, 3.3 V power and pull-up resistors.';
+    const { devices, lines = [] } = await api('scan');
+    const bad = lines.filter((l) => !l.ok);
+    const hint = bad.map((l) => `${l.name} (GPIO ${l.gpio}): ${l.verdict}`).join(' · ');
+    m.textContent = devices.length ? `${devices.length} device(s) found.` + (hint ? ' Line check: ' + hint : '')
+                                   : 'Nothing found. Line check: ' + (hint || 'all lines have a pull-up, but no device answers.');
+    m.className = 'msg' + (devices.length ? '' : ' err');
     $('#scan-table').hidden = !devices.length;
     $('#scan-rows').replaceChildren(...devices.map((d) => {
       let action;

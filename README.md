@@ -82,7 +82,7 @@ sa> set pass my-wifi-password
 sa> reboot
 ```
 
-Other console commands: `status`, `show`, `log`, `scan` (I2C/1-Wire sensors), `wifi-scan`, `net`, `ping <ip>`, `factory-reset`, `help`.
+Other console commands: `status`, `show`, `log`, `scan` (I2C/1-Wire sensors), `pins` (bus line check), `wifi-scan`, `net`, `ping <ip>`, `factory-reset`, `help`.
 
 ## Firmware update
 

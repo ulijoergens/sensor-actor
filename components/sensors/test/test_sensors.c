@@ -111,3 +111,15 @@ TEST_CASE("DS18B20 defaults and validation", "[sensors]")
     t = c; t.ds_resolution = 13;                   TEST_ASSERT_NOT_NULL(sa_sensor_validate(&t));
     t = c; t.rom = (rom & ~0xFFULL) | 0x10;        TEST_ASSERT_NOT_NULL(sa_sensor_validate(&t));  // DS18S20 family
 }
+
+TEST_CASE("bus line verdicts", "[sensors]")
+{
+    bool ok;
+    TEST_ASSERT_NOT_NULL(strstr(sa_line_verdict(1, 1, &ok), "pull-up present"));
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_NOT_NULL(strstr(sa_line_verdict(1, 0, &ok), "no external pull-up"));
+    TEST_ASSERT_FALSE(ok);
+    TEST_ASSERT_NOT_NULL(strstr(sa_line_verdict(0, 0, &ok), "held low"));
+    TEST_ASSERT_FALSE(ok);
+    TEST_ASSERT_NOT_NULL(strstr(sa_line_verdict(0, 1, &ok), "held low"));
+}

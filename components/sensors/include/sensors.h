@@ -125,6 +125,23 @@ typedef void (*sa_sensor_value_cb_t)(const char *sensor_id, sa_quantity_t q, flo
                                      float median, bool fault);
 void sensors_set_value_callback(sa_sensor_value_cb_t cb);
 
+// Electrical check of one bus line (REQ-DET-3): idle level with the internal pull-up on
+// and, briefly, off.
+typedef struct {
+    const char *name;        // "SDA", "SCL", "1-Wire"
+    int gpio;
+    int level_pullup;        // 0/1
+    int level_float;         // 0/1, internal pull-up off
+    const char *verdict;     // plain-language interpretation
+    bool ok;                 // looks like a powered module with pull-up
+} sa_line_check_t;
+
+// Checks SDA, SCL and the 1-Wire line. Returns the number of entries (3).
+int sensors_line_check(sa_line_check_t out[3]);
+
+// Pure interpretation of the two levels (unit-tested).
+const char *sa_line_verdict(int level_pullup, int level_float, bool *ok);
+
 // Request discovery + current values for all sensors (MQTT connect handler; done by the
 // sensor task).
 void sensors_mqtt_announce(void);

@@ -88,6 +88,19 @@ static esp_err_t api_scan(httpd_req_t *req)
         cJSON_AddStringToObject(d, "sensor_id", e[i].sensor_id);
         cJSON_AddItemToArray(arr, d);
     }
+    sa_line_check_t lc[3];
+    int nl = sensors_line_check(lc);
+    cJSON *lines = cJSON_AddArrayToObject(root, "lines");
+    for (int i = 0; i < nl; i++) {
+        cJSON *l = cJSON_CreateObject();
+        cJSON_AddStringToObject(l, "name", lc[i].name);
+        cJSON_AddNumberToObject(l, "gpio", lc[i].gpio);
+        cJSON_AddNumberToObject(l, "level_pullup", lc[i].level_pullup);
+        cJSON_AddNumberToObject(l, "level_float", lc[i].level_float);
+        cJSON_AddBoolToObject(l, "ok", lc[i].ok);
+        cJSON_AddStringToObject(l, "verdict", lc[i].verdict);
+        cJSON_AddItemToArray(lines, l);
+    }
     return webui_send_json(req, root);
 }
 

@@ -5,7 +5,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "driver/gpio.h"
 #include "driver/i2c_master.h"
+#include "esp_rom_sys.h"
 #include "drv_vl53l1x.h"
 #include "ds18b20.h"
 #include "onewire_bus.h"
@@ -735,6 +737,31 @@ esp_err_t sensors_remove(const char *id)
     }
     unlock();
     return err;
+}
+
+static void check_line(sa_line_check_t *o, const char *name, int gpio)
+{
+    o->name = name;
+    o->gpio = gpio;
+    o->level_pullup = gpio_get_level(gpio);
+    gpio_pullup_dis(gpio);
+    esp_rom_delay_us(200);   // let a floating line discharge
+    o->level_float = gpio_get_level(gpio);
+    gpio_pullup_en(gpio);    // both buses run with the internal pull-up enabled
+    o->verdict = sa_line_verdict(o->level_pullup, o->level_float, &o->ok);
+}
+
+int sensors_line_check(sa_line_check_t out[3])
+{
+    const sa_device_cfg_t *c = sa_config_get();
+    lock();            // no 1-Wire traffic from the sensor task meanwhile
+    sa_i2c_lock();     // no I2C traffic meanwhile
+    check_line(&out[0], "SDA", c->i2c_sda);
+    check_line(&out[1], "SCL", c->i2c_scl);
+    check_line(&out[2], "1-Wire", c->onewire);
+    sa_i2c_unlock();
+    unlock();
+    return 3;
 }
 
 int sensors_scan(sa_scan_entry_t *out, int max)
