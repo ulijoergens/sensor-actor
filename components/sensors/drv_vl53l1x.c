@@ -45,16 +45,31 @@ _Static_assert(sizeof(DEFAULT_CONFIG) == 0x87 - 0x2D + 1, "default config covers
 static const uint8_t STATUS_MAP[24] = {255, 255, 255, 5, 2, 4, 1, 7, 3, 0, 255, 255,
                                        9, 13, 255, 255, 255, 255, 10, 6, 255, 255, 11, 12};
 
+// Every transfer must fit the 32-byte hardware FIFO (address + register + data). The
+// ESP-IDF I2C master driver continues longer transfers from its ISR; if such a transfer
+// breaks off (e.g. an unpowered sensor running on parasitic power through the pull-ups
+// browns out), the driver keeps stale continuation state and the next transfer has read
+// a dangling buffer pointer (LoadProhibited in s_i2c_write_command) or hung. Longer
+// writes are therefore split into separate, complete transfers.
+#define WR_CHUNK 24
+
 static esp_err_t wr(vl53l1x_t *s, uint16_t reg, const uint8_t *data, size_t len)
 {
-    uint8_t buf[2 + sizeof(DEFAULT_CONFIG)];
-    if (len > sizeof(DEFAULT_CONFIG)) {
-        return ESP_ERR_INVALID_SIZE;
+    uint8_t buf[2 + WR_CHUNK];
+    while (len > 0) {
+        size_t n = len > WR_CHUNK ? WR_CHUNK : len;
+        buf[0] = reg >> 8;
+        buf[1] = reg & 0xFF;
+        memcpy(buf + 2, data, n);
+        esp_err_t err = i2c_master_transmit(s->dev, buf, n + 2, XFER_MS);
+        if (err != ESP_OK) {
+            return err;
+        }
+        reg += n;
+        data += n;
+        len -= n;
     }
-    buf[0] = reg >> 8;
-    buf[1] = reg & 0xFF;
-    memcpy(buf + 2, data, len);
-    return i2c_master_transmit(s->dev, buf, len + 2, XFER_MS);
+    return ESP_OK;
 }
 
 static esp_err_t wr8(vl53l1x_t *s, uint16_t reg, uint8_t v)
@@ -141,7 +156,7 @@ esp_err_t vl53l1x_init(vl53l1x_t *s, i2c_master_bus_handle_t bus, uint8_t addr, 
 
     uint8_t id = 0, booted = 0;
     if ((err = rd(s, REG_MODEL_ID, &id, 1)) != ESP_OK || id != 0xEA) {
-        ESP_LOGW(TAG, "0x%02X: model ID 0x%02X, not a VL53L1X", addr, id);
+        ESP_LOGD(TAG, "0x%02X: model ID 0x%02X, not a VL53L1X", addr, id);
         i2c_master_bus_rm_device(s->dev);
         s->dev = NULL;
         return err != ESP_OK ? err : ESP_ERR_NOT_FOUND;
@@ -170,7 +185,9 @@ esp_err_t vl53l1x_init(vl53l1x_t *s, i2c_master_bus_handle_t bus, uint8_t addr, 
     if (err == ESP_OK) err = wr8(s, REG_SYSTEM_INTERRUPT_CLEAR, 0x01);
     if (err == ESP_OK) err = wr8(s, REG_SYSTEM_MODE_START, 0x40);   // continuous ranging
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "0x%02X: init failed: %s", addr, esp_err_to_name(err));
+        // Debug level: during an outage this repeats every retry; the sensor module logs
+        // one line per state change instead.
+        ESP_LOGD(TAG, "0x%02X: init failed: %s", addr, esp_err_to_name(err));
         i2c_master_bus_rm_device(s->dev);   // no further writes to a device that failed
         s->dev = NULL;
         return err;

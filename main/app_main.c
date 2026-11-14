@@ -75,11 +75,13 @@ void app_main(void)
     sa_i2c_init();   // a bus error is logged; the node keeps running without sensors
     ESP_ERROR_CHECK(wifi_mgr_start());
     bool web_ok = webui_start() == ESP_OK;
-    if (sensors_init() != ESP_OK) {
-        ESP_LOGE(TAG, "sensor task failed to start");
-    }
+    // Actors first: they register for sensor values, so the very first sensor result
+    // (e.g. "missing" at boot, which triggers a rule's fault action) is not lost.
     if (actors_init() != ESP_OK) {
         ESP_LOGE(TAG, "actor task failed to start");
+    }
+    if (sensors_init() != ESP_OK) {
+        ESP_LOGE(TAG, "sensor task failed to start");
     }
     if (sa_mqtt_start() != ESP_OK) {
         ESP_LOGE(TAG, "MQTT client failed to start");
