@@ -43,7 +43,8 @@ LEDGE_D = 3.0         # how far the end ledges reach under the board
 LEDGE_SIDE = 3.5      # ledges stop this far from the long edges (header solder joints)
 
 USB_W = 16.0          # opening for a micro/USB-C plug with overmould (12 mm was too tight)
-USB_BELOW = 4.5       # opening starts this far below the top of the board (room for the plug sleeve)
+USB_DROP = 2.5        # how far the USB socket (shell, sleeve) may reach below the board's underside;
+                      # the end-wall opening goes down to the inside floor, the ledge leaves a gap for it
 
 WIN_L = 9.0           # window over the USB end (EN/BOOT, LED), from the board end
 WIN_W = 18.0          # window width (between the header slots)
@@ -100,11 +101,13 @@ def make_base():
 
     # ledges under both short ends of the board
     yl = IN_W / 2 - LEDGE_SIDE
-    base += box(X0, -yl, FLOOR - 0.01, LEDGE_D, yl, Z_LEDGE)
+    for y0, y1 in ((-yl, -USB_W / 2), (USB_W / 2, yl)):          # USB end: gap for the socket
+        base += box(X0, y0, FLOOR - 0.01, LEDGE_D, y1, Z_LEDGE)
     base += box(PCB_L - LEDGE_D, -yl, FLOOR - 0.01, X0 + IN_L, yl, Z_LEDGE)
 
-    # USB opening in the end wall at x < 0, open to the top (no supports needed)
-    base -= box(ox0 - 1, -USB_W / 2, Z_PCB_TOP - USB_BELOW, X0 + 0.01, USB_W / 2, Z_TOP + 1)
+    # USB opening in the end wall at x < 0, open to the top (no supports needed), down to the
+    # inside floor so a socket that reaches below the board cannot rest on it
+    base -= box(ox0 - 0.01, -USB_W / 2, FLOOR, X0 + 0.01, USB_W / 2, Z_TOP + 1)
 
     # screw tabs
     for sign, xe in ((-1, ox0), (1, ox1)):
@@ -112,8 +115,6 @@ def make_base():
         tab = rounded_box(min(xe - sign * 1.0, x_far), -TAB_W / 2, 0, max(xe - sign * 1.0, x_far), TAB_W / 2, TAB_T, 3.0)
         tab -= cyl(xe + sign * TAB_L / 2, 0, -1, TAB_T + 1, SCREW_D)
         base += tab
-    # the screw tab at the USB end must not block the USB opening
-    base -= box(ox0 - TAB_L - 1, -USB_W / 2, Z_PCB_TOP - USB_BELOW, X0 + 0.01, USB_W / 2, Z_TOP + 1)
 
     # a small notch on one long side to lever the lid out
     base -= box(OUT_L / 2 + X0 - WALL - 5, oy - WALL - 0.01, Z_TOP - 1.2, OUT_L / 2 + X0 - WALL + 5, oy + 1, Z_TOP + 1)
@@ -153,7 +154,7 @@ def board_dummy():
     for ys in (-ROW_PITCH / 2, ROW_PITCH / 2):
         b += box(3.0, ys - 1.27, Z_PCB_TOP, 3.0 + 19 * 2.54, ys + 1.27, Z_PCB_TOP + 2.5)   # header plastic
     b += box(PCB_L - 18, -9, Z_PCB_TOP, PCB_L - 0.5, 9, Z_PCB_TOP + 3.2)                 # WROOM module
-    b += box(-1.0, -4, Z_PCB_TOP, 5, 4, Z_PCB_TOP + 3.0)                                  # USB socket
+    b += box(-1.5, -4, Z_LEDGE - USB_DROP, 5, 4, Z_PCB_TOP + 3.0)                         # USB socket, overhanging
     return b
 
 
