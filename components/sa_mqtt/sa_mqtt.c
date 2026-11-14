@@ -2,6 +2,7 @@
 #include "sa_mqtt.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "cJSON.h"
 #include "esp_app_desc.h"
@@ -31,6 +32,7 @@ static char s_id[SA_ID_MAX + 1];
 static char s_status_topic[48];
 static bool s_logged_down;   // avoid one log line per reconnect attempt
 static bool s_running;       // client started (only while WiFi has an IP address)
+static void (*s_connect_cb)(void);
 
 // ---------------------------------------------------------------- pure helpers
 
@@ -84,13 +86,28 @@ bool sa_mqtt_publish(const char *sub, const char *payload, bool retain)
     return true;
 }
 
-static void publish_raw(const char *topic, const char *payload, bool retain)
+bool sa_mqtt_publish_topic(const char *topic, const char *payload, bool retain)
 {
-    if (esp_mqtt_client_enqueue(s_client, topic, payload, 0, 1, retain, true) >= 0) {
-        portENTER_CRITICAL(&s_lock);
-        s_st.published++;
-        portEXIT_CRITICAL(&s_lock);
+    if (!s_client || !s_st.connected) {
+        return false;
     }
+    if (esp_mqtt_client_enqueue(s_client, topic, payload, 0, 1, retain, true) < 0) {
+        return false;
+    }
+    portENTER_CRITICAL(&s_lock);
+    s_st.published++;
+    portEXIT_CRITICAL(&s_lock);
+    return true;
+}
+
+bool sa_mqtt_connected(void)
+{
+    return s_st.connected;
+}
+
+void sa_mqtt_set_connect_handler(void (*cb)(void))
+{
+    s_connect_cb = cb;
 }
 
 static void publish_info(void)
@@ -119,20 +136,19 @@ static void info_timer_cb(void *arg)
 // ---------------------------------------------------------------- discovery (REQ-MQ-4)
 
 typedef struct {
-    const char *key;          // object id suffix
+    const char *key;
     const char *name;
-    const char *component;    // HA component type
     const char *value_tpl;
     const char *unit;
     const char *dev_class;
 } diag_entity_t;
 
 static const diag_entity_t s_diag[] = {
-    {"rssi", "WiFi signal", "sensor", "{{ value_json.rssi }}", "dBm", "signal_strength"},
-    {"uptime", "Uptime", "sensor", "{{ value_json.uptime }}", "s", "duration"},
-    {"ip", "IP address", "sensor", "{{ value_json.ip }}", NULL, NULL},
-    {"heap", "Free memory", "sensor", "{{ value_json.heap }}", "B", "data_size"},
-    {"firmware", "Firmware", "sensor", "{{ value_json.firmware }}", NULL, NULL},
+    {"rssi", "WiFi signal", "{{ value_json.rssi }}", "dBm", "signal_strength"},
+    {"uptime", "Uptime", "{{ value_json.uptime }}", "s", "duration"},
+    {"ip", "IP address", "{{ value_json.ip }}", NULL, NULL},
+    {"heap", "Free memory", "{{ value_json.heap }}", "B", "data_size"},
+    {"firmware", "Firmware", "{{ value_json.firmware }}", NULL, NULL},
 };
 
 static void add_device(cJSON *o, const sa_device_cfg_t *c)
@@ -163,42 +179,60 @@ static void add_device(cJSON *o, const sa_device_cfg_t *c)
     }
 }
 
+bool sa_mqtt_discovery_topic(char *topic, size_t len, const char *component, const char *key,
+                             char *uid, size_t uid_len)
+{
+    const sa_device_cfg_t *c = sa_config_get();
+    int n = snprintf(uid, uid_len, "sensact_%s_%s", c->id, key);
+    if (n <= 0 || (size_t)n >= uid_len) {
+        return false;
+    }
+    n = snprintf(topic, len, "%s/%s/%s/config", c->discovery_prefix, component, uid);
+    return n > 0 && (size_t)n < len;
+}
+
+char *sa_mqtt_discovery_json(const char *name, const char *uid, const char *state_topic_sub,
+                             const char *value_template, const char *unit, const char *device_class,
+                             const char *state_class, bool diagnostic)
+{
+    const sa_device_cfg_t *c = sa_config_get();
+    char state_topic[96];
+    sa_mqtt_topic(state_topic, sizeof(state_topic), c->id, state_topic_sub);
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "name", name);
+    cJSON_AddStringToObject(o, "unique_id", uid);
+    cJSON_AddStringToObject(o, "object_id", uid);
+    cJSON_AddStringToObject(o, "state_topic", state_topic);
+    if (value_template) cJSON_AddStringToObject(o, "value_template", value_template);
+    if (unit) cJSON_AddStringToObject(o, "unit_of_measurement", unit);
+    if (device_class) cJSON_AddStringToObject(o, "device_class", device_class);
+    if (state_class) cJSON_AddStringToObject(o, "state_class", state_class);
+    if (diagnostic) cJSON_AddStringToObject(o, "entity_category", "diagnostic");
+    cJSON_AddStringToObject(o, "availability_topic", s_status_topic);
+    add_device(o, c);
+    char *txt = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    return txt;
+}
+
 static void publish_discovery(void)
 {
     const sa_device_cfg_t *c = sa_config_get();
-    char topic[128], state_topic[48];
-    sa_mqtt_topic(state_topic, sizeof(state_topic), c->id, "info");
-
+    char topic[128], uid[48];
     for (size_t i = 0; i < sizeof(s_diag) / sizeof(s_diag[0]); i++) {
         const diag_entity_t *e = &s_diag[i];
-        snprintf(topic, sizeof(topic), "%s/%s/sensact_%s_%s/config", c->discovery_prefix,
-                 e->component, c->id, e->key);
-        if (!c->discovery) {
-            publish_raw(topic, "", true);   // remove previously announced entities
+        if (!sa_mqtt_discovery_topic(topic, sizeof(topic), "sensor", e->key, uid, sizeof(uid))) {
             continue;
         }
-        char uid[40];
-        snprintf(uid, sizeof(uid), "sensact_%s_%s", c->id, e->key);
-        cJSON *o = cJSON_CreateObject();
-        cJSON_AddStringToObject(o, "name", e->name);
-        cJSON_AddStringToObject(o, "unique_id", uid);
-        cJSON_AddStringToObject(o, "object_id", uid);
-        cJSON_AddStringToObject(o, "state_topic", state_topic);
-        cJSON_AddStringToObject(o, "value_template", e->value_tpl);
-        if (e->unit) {
-            cJSON_AddStringToObject(o, "unit_of_measurement", e->unit);
+        if (!c->discovery) {
+            sa_mqtt_publish_topic(topic, "", true);   // remove previously announced entities
+            continue;
         }
-        if (e->dev_class) {
-            cJSON_AddStringToObject(o, "device_class", e->dev_class);
-        }
-        cJSON_AddStringToObject(o, "entity_category", "diagnostic");
-        cJSON_AddStringToObject(o, "availability_topic", s_status_topic);
-        add_device(o, c);
-        char *txt = cJSON_PrintUnformatted(o);
-        cJSON_Delete(o);
+        char *txt = sa_mqtt_discovery_json(e->name, uid, "info", e->value_tpl, e->unit, e->dev_class,
+                                           NULL, true);
         if (txt) {
-            publish_raw(topic, txt, true);
-            cJSON_free(txt);
+            sa_mqtt_publish_topic(topic, txt, true);
+            free(txt);
         }
     }
     ESP_LOGI(TAG, "discovery %s (prefix \"%s\")", c->discovery ? "published" : "removed",
@@ -226,12 +260,15 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
         portEXIT_CRITICAL(&s_lock);
         s_logged_down = false;
         ESP_LOGI(TAG, "connected to %s", s_st.broker);
-        publish_raw(s_status_topic, "online", true);
+        sa_mqtt_publish_topic(s_status_topic, "online", true);
         char sub[64];
         snprintf(sub, sizeof(sub), SA_MQTT_BASE "/%s/actor/+/set", s_id);
         esp_mqtt_client_subscribe(ev->client, sub, 1);
         publish_discovery();
         publish_info();
+        if (s_connect_cb) {
+            s_connect_cb();
+        }
         esp_timer_stop(s_info_timer);
         esp_timer_start_periodic(s_info_timer, INFO_INTERVAL_US);
         break;

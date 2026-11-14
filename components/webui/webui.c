@@ -1,5 +1,6 @@
 // Web UI server, see webui.h.
 #include "webui.h"
+#include "webui_priv.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -50,7 +51,7 @@ static const asset_t s_css = {style_css_start, style_css_end, "text/css"};
 
 // ---------------------------------------------------------------- helpers
 
-static esp_err_t send_json(httpd_req_t *req, cJSON *root)
+esp_err_t webui_send_json(httpd_req_t *req, cJSON *root)
 {
     char *txt = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -64,12 +65,12 @@ static esp_err_t send_json(httpd_req_t *req, cJSON *root)
     return err;
 }
 
-static esp_err_t send_error(httpd_req_t *req, const char *status, const char *msg)
+esp_err_t webui_send_error(httpd_req_t *req, const char *status, const char *msg)
 {
     cJSON *o = cJSON_CreateObject();
     cJSON_AddStringToObject(o, "error", msg);
     httpd_resp_set_status(req, status);
-    return send_json(req, o);
+    return webui_send_json(req, o);
 }
 
 static void reboot_cb(void *arg)
@@ -151,7 +152,7 @@ static esp_err_t api_status(httpd_req_t *req)
 
     cJSON *l = cJSON_AddObjectToObject(root, "log");
     cJSON_AddNumberToObject(l, "count", sa_log_count());
-    return send_json(req, root);
+    return webui_send_json(req, root);
 }
 
 static esp_err_t api_settings_get(httpd_req_t *req)
@@ -171,7 +172,7 @@ static esp_err_t api_settings_get(httpd_req_t *req)
     cJSON_AddNumberToObject(o, "i2c_sda", c->i2c_sda);
     cJSON_AddNumberToObject(o, "i2c_scl", c->i2c_scl);
     cJSON_AddNumberToObject(o, "onewire", c->onewire);
-    return send_json(req, o);
+    return webui_send_json(req, o);
 }
 
 // Copies a string field if present. Returns an error message or NULL.
@@ -205,21 +206,25 @@ static const char *take_int(cJSON *o, const char *key, int min, int max, int *ds
     return NULL;
 }
 
-static esp_err_t api_settings_post(httpd_req_t *req)
+cJSON *webui_read_json(httpd_req_t *req, const char **why)
 {
+    *why = NULL;
     if (req->content_len <= 0 || req->content_len > MAX_BODY) {
-        return send_error(req, "400 Bad Request", "Request body missing or too large");
+        *why = "Request body missing or too large";
+        return NULL;
     }
     char *body = malloc(req->content_len + 1);
     if (!body) {
-        return send_error(req, "500 Internal Server Error", "Out of memory");
+        *why = "Out of memory";
+        return NULL;
     }
     int got = 0;
     while (got < req->content_len) {
         int r = httpd_req_recv(req, body + got, req->content_len - got);
         if (r <= 0) {
             free(body);
-            return ESP_FAIL;
+            *why = "Request body incomplete";
+            return NULL;
         }
         got += r;
     }
@@ -228,7 +233,18 @@ static esp_err_t api_settings_post(httpd_req_t *req)
     free(body);
     if (!cJSON_IsObject(in)) {
         cJSON_Delete(in);
-        return send_error(req, "400 Bad Request", "Invalid JSON");
+        *why = "Invalid JSON";
+        return NULL;
+    }
+    return in;
+}
+
+static esp_err_t api_settings_post(httpd_req_t *req)
+{
+    const char *why;
+    cJSON *in = webui_read_json(req, &why);
+    if (!in) {
+        return webui_send_error(req, "400 Bad Request", why);
     }
 
     sa_device_cfg_t c = *sa_config_get();
@@ -269,25 +285,25 @@ static esp_err_t api_settings_post(httpd_req_t *req)
     }
     cJSON_Delete(in);
     if (bad) {
-        return send_error(req, "400 Bad Request", bad);
+        return webui_send_error(req, "400 Bad Request", bad);
     }
     c.mqtt_port = (uint16_t)port;
     c.i2c_sda = (int8_t)sda;
     c.i2c_scl = (int8_t)scl;
     c.onewire = (int8_t)ow;
 
-    const char *why = sa_config_validate(&c);
+    why = sa_config_validate(&c);
     if (why) {
-        return send_error(req, "400 Bad Request", why);
+        return webui_send_error(req, "400 Bad Request", why);
     }
     if (sa_config_save(&c) != ESP_OK) {
-        return send_error(req, "500 Internal Server Error", "Saving failed");
+        return webui_send_error(req, "500 Internal Server Error", "Saving failed");
     }
     ESP_LOGI(TAG, "settings changed from the web UI, rebooting");
     cJSON *o = cJSON_CreateObject();
     cJSON_AddBoolToObject(o, "ok", true);
     cJSON_AddBoolToObject(o, "reboot", true);
-    esp_err_t err = send_json(req, o);
+    esp_err_t err = webui_send_json(req, o);
     reboot_soon();
     return err;
 }
@@ -296,7 +312,7 @@ static esp_err_t api_log(httpd_req_t *req)
 {
     sa_log_entry_t *e = malloc(sizeof(sa_log_entry_t) * SA_LOG_ENTRIES);
     if (!e) {
-        return send_error(req, "500 Internal Server Error", "Out of memory");
+        return webui_send_error(req, "500 Internal Server Error", "Out of memory");
     }
     int n = sa_log_get(e, SA_LOG_ENTRIES);
     cJSON *root = cJSON_CreateObject();
@@ -315,14 +331,14 @@ static esp_err_t api_log(httpd_req_t *req)
         cJSON_AddItemToArray(arr, it);
     }
     free(e);
-    return send_json(req, root);
+    return webui_send_json(req, root);
 }
 
 static esp_err_t api_reboot(httpd_req_t *req)
 {
     cJSON *o = cJSON_CreateObject();
     cJSON_AddBoolToObject(o, "ok", true);
-    esp_err_t err = send_json(req, o);
+    esp_err_t err = webui_send_json(req, o);
     reboot_soon();
     return err;
 }
@@ -332,7 +348,8 @@ static esp_err_t api_reboot(httpd_req_t *req)
 esp_err_t webui_start(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
-    cfg.max_uri_handlers = 16;
+    cfg.max_uri_handlers = 24;
+    cfg.uri_match_fn = httpd_uri_match_wildcard;
     cfg.stack_size = 8192;
     cfg.lru_purge_enable = true;
 
@@ -356,6 +373,7 @@ esp_err_t webui_start(void)
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
         ESP_ERROR_CHECK(httpd_register_uri_handler(srv, &uris[i]));
     }
+    webui_register_sensors(srv);
     ESP_LOGI(TAG, "web UI running on port %d", cfg.server_port);
     return ESP_OK;
 }

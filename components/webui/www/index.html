@@ -11,7 +11,7 @@
   <a class="brand" href="#/"><span class="dot" id="hdr-dot"></span><span id="hdr-name">Sensor-Actor</span></a>
   <nav>
     <a href="#/" data-page="home">Home</a>
-    <a class="soon" title="Coming in a later version">Sensors</a>
+    <a href="#/sensors" data-page="sensors">Sensors</a>
     <a class="soon" title="Coming in a later version">Actors</a>
     <a href="#/settings" data-page="settings">Settings</a>
     <a href="#/status" data-page="status">Status</a>
@@ -29,7 +29,8 @@
       <div class="card"><h3>Warnings / errors</h3><div class="big" id="h-log">–</div><div class="sub"><a href="#/status">Show log</a></div></div>
     </div>
     <h2>Favourites</h2>
-    <p class="muted">Favourite sensors and actors will appear here once sensor and actor support is added.</p>
+    <div class="cards" id="h-favs"></div>
+    <p class="muted" id="h-favs-empty">Mark sensors as favourites on their detail page to show them here.</p>
   </section>
 
   <!-- Settings -->
@@ -72,6 +73,57 @@
     </form>
     <h2>Firmware update</h2>
     <p class="muted">Firmware upload (OTA) will be added in the next version.</p>
+  </section>
+
+  <!-- Sensors -->
+  <section id="page-sensors" hidden>
+    <h1>Sensors</h1>
+    <table class="list"><thead><tr><th>Sensor</th><th>Value</th><th>Median</th><th>State</th><th>Active</th></tr></thead>
+      <tbody id="sensor-rows"></tbody></table>
+    <h2>Add a sensor</h2>
+    <p class="muted">Scan the I2C bus to find connected sensors.</p>
+    <div class="buttons"><button type="button" id="btn-scan">Scan bus</button></div>
+    <p class="msg" id="scan-msg"></p>
+    <table class="list" id="scan-table" hidden><thead><tr><th>Address</th><th>Device</th><th>Details</th><th></th></tr></thead>
+      <tbody id="scan-rows"></tbody></table>
+  </section>
+
+  <!-- Sensor detail -->
+  <section id="page-sensor" hidden>
+    <p><a href="#/sensors">← Sensors</a></p>
+    <h1 id="sd-title">Sensor</h1>
+    <div class="cards" id="sd-values"></div>
+    <p class="msg err" id="sd-error"></p>
+    <form id="sensor-form" autocomplete="off" novalidate>
+      <fieldset><legend>Sensor</legend>
+        <label>Label <input name="label" maxlength="32" required></label>
+        <label>ID <input name="id" maxlength="8" pattern="[a-z0-9_\-]{1,8}" required>
+          <small>1–8 characters a–z, 0–9, _ or -. Used in MQTT topics.</small></label>
+        <label class="check"><input type="checkbox" name="active"> Active</label>
+        <label class="check"><input type="checkbox" name="favourite"> Favourite (shown on Home)</label>
+        <p class="muted" id="sd-hw"></p>
+      </fieldset>
+      <fieldset><legend>Reading</legend>
+        <div class="row">
+          <label>Read interval (s) <input name="interval_s" type="number" min="1" max="3600" required></label>
+          <label>Median window <input name="median_n" type="number" min="3" max="31" required></label>
+        </div>
+      </fieldset>
+      <fieldset id="sd-vl" hidden><legend>Distance sensor</legend>
+        <label>Distance mode
+          <select name="vl_mode"><option value="long">Long (up to ~4 m)</option><option value="short">Short (up to ~1.3 m, better in bright light)</option></select></label>
+        <label>Mounting height (mm) <input name="mount_mm" type="number" min="0" max="4000">
+          <small>Distance from the sensor to the tank bottom. When set, the sensor also reports level = height − distance. 0 = off.</small></label>
+      </fieldset>
+      <fieldset><legend>Calibration offsets</legend>
+        <div class="row" id="sd-offsets"></div>
+      </fieldset>
+      <p class="msg" id="sensor-msg"></p>
+      <div class="buttons">
+        <button type="submit" class="primary">Save</button>
+        <button type="button" id="btn-sensor-delete" class="danger">Remove sensor</button>
+      </div>
+    </form>
   </section>
 
   <!-- Status -->

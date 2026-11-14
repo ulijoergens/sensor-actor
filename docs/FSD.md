@@ -179,7 +179,7 @@ The UI is plain HTML, CSS and JavaScript, gzipped and built into the firmware so
 | Home | system status (WiFi, MQTT, uptime, errors); favourite sensors (value + median) and favourite actors (with switch); menu |
 | Settings | device name, device ID, WiFi SSID and password, MQTT broker IP and port (user and password), discovery on/off and prefix; I2C and 1-Wire pins; firmware upload (OTA); reboot |
 | Sensors | list with value, status and an active toggle; "Scan bus" button; link to the detail page |
-| Sensor detail | type, bus address, parameters, label, ID, last value, median, favourite; all fields editable |
+| Sensor detail | type, bus address, parameters, label, ID, last value, median, favourite; all fields editable. API: `GET/POST /api/sensors`, `GET/POST/DELETE /api/sensors/<id>`, `GET /api/scan` |
 | Actors | list with state, active toggle and switch; "Add actor"; link to the detail page |
 | Actor detail | GPIO, label, ID, state, favourite, active-low, power-on state, fault action; rule editor (sensor + quantity, last or median, T1 and T2 each with rising and falling actions) with a plain-language summary; all fields editable |
 | Status | error log (newest first), WiFi (SSID, RSSI, IP, mode), MQTT (connected, broker, last error), uptime, firmware version, free heap |

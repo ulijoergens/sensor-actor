@@ -16,6 +16,7 @@
 #include "sa_i2c.h"
 #include "sa_log.h"
 #include "sa_mqtt.h"
+#include "sensors.h"
 #include "webui.h"
 #include "wifi_mgr.h"
 
@@ -71,6 +72,9 @@ void app_main(void)
     sa_i2c_init();   // a bus error is logged; the node keeps running without sensors
     ESP_ERROR_CHECK(wifi_mgr_start());
     bool web_ok = webui_start() == ESP_OK;
+    if (sensors_init() != ESP_OK) {
+        ESP_LOGE(TAG, "sensor task failed to start");
+    }
     if (sa_mqtt_start() != ESP_OK) {
         ESP_LOGE(TAG, "MQTT client failed to start");
     }

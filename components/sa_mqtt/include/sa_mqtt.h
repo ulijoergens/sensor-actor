@@ -46,6 +46,26 @@ void sa_mqtt_get_status(sa_mqtt_status_t *out);
 // Publishes to sensact/<id>/<sub>. Non-blocking; dropped if not connected.
 bool sa_mqtt_publish(const char *sub, const char *payload, bool retain);
 
+// Publishes to an absolute topic (e.g. discovery). Non-blocking; dropped if not connected.
+bool sa_mqtt_publish_topic(const char *topic, const char *payload, bool retain);
+
+bool sa_mqtt_connected(void);
+
+// Builds "<prefix>/<component>/sensact_<device-id>_<key>/config" and the matching
+// unique ID "sensact_<device-id>_<key>".
+bool sa_mqtt_discovery_topic(char *topic, size_t len, const char *component, const char *key,
+                             char *uid, size_t uid_len);
+
+// Discovery config JSON (malloc'd, free with free()); NULL-able fields are omitted.
+// `state_topic_sub` is relative to sensact/<device-id>/.
+char *sa_mqtt_discovery_json(const char *name, const char *uid, const char *state_topic_sub,
+                             const char *value_template, const char *unit, const char *device_class,
+                             const char *state_class, bool diagnostic);
+
+// Called (MQTT task context) after each successful connection, after the device's own
+// status/info/discovery, so other modules can announce their entities.
+void sa_mqtt_set_connect_handler(void (*cb)(void));
+
 // Called for each command on sensact/<id>/actor/<aid>/set (MQTT task context).
 // Return false if the actor is unknown or inactive (the command is then logged).
 typedef bool (*sa_mqtt_command_cb_t)(const char *aid, const char *payload);

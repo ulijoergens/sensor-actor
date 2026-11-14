@@ -6,6 +6,7 @@
 #include "driver/i2c_master.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "sa_config.h"
 
@@ -15,6 +16,26 @@ static const char *TAG = "i2c";
 #define SCAN_HZ   100000
 
 static i2c_master_bus_handle_t s_bus;
+static SemaphoreHandle_t s_mutex;
+
+i2c_master_bus_handle_t sa_i2c_bus(void)
+{
+    return s_bus;
+}
+
+void sa_i2c_lock(void)
+{
+    if (s_mutex) {
+        xSemaphoreTakeRecursive(s_mutex, portMAX_DELAY);
+    }
+}
+
+void sa_i2c_unlock(void)
+{
+    if (s_mutex) {
+        xSemaphoreGiveRecursive(s_mutex);
+    }
+}
 
 const char *sa_chip_name(sa_chip_t c)
 {
@@ -54,6 +75,7 @@ esp_err_t sa_i2c_init(void)
         .glitch_ignore_cnt = 7,
         .flags.enable_internal_pullup = true,
     };
+    s_mutex = xSemaphoreCreateRecursiveMutex();
     esp_err_t err = i2c_new_master_bus(&bc, &s_bus);
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "bus on SDA %d, SCL %d", c->i2c_sda, c->i2c_scl);
@@ -157,6 +179,7 @@ int sa_i2c_scan(sa_i2c_found_t *out, int max)
         return 0;
     }
     int n = 0;
+    sa_i2c_lock();
     for (uint8_t a = 0x08; a <= 0x77; a++) {
         if (i2c_master_probe(s_bus, a, XFER_MS) != ESP_OK) {
             continue;
@@ -169,5 +192,6 @@ int sa_i2c_scan(sa_i2c_found_t *out, int max)
         }
         n++;
     }
+    sa_i2c_unlock();
     return n;
 }

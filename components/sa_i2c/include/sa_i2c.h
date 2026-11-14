@@ -7,6 +7,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "driver/i2c_master.h"
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -40,6 +41,13 @@ uint8_t sa_crc8_sensirion(const uint8_t *data, int len);
 // Creates the bus on the configured SDA/SCL pins (internal pull-ups enabled; external
 // 4.7 kΩ pull-ups are still recommended).
 esp_err_t sa_i2c_init(void);
+
+// The shared bus handle (NULL if init failed), for sensor drivers.
+i2c_master_bus_handle_t sa_i2c_bus(void);
+
+// Serialises bus access between the sensor task and scans.
+void sa_i2c_lock(void);
+void sa_i2c_unlock(void);
 
 // Scans 0x08..0x77 and identifies what it finds. Returns the number of devices (up to
 // `max` are stored).
