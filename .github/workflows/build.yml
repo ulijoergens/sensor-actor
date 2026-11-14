@@ -11,13 +11,13 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # ESP-IDF v6.1, pinned by digest so every build uses the same toolchain.
     container:
       image: espressif/idf:v6.1@sha256:81893c71bb5e570088901f21def8684c25cd2a9020281bd01b843a7655edb18c
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build firmware
         shell: bash
@@ -42,7 +42,8 @@ jobs:
           cp build/bootloader/bootloader.bin build/partition_table/partition-table.bin dist/
           cp build/ota_data_initial.bin dist/ 2>/dev/null || true
           cp build/flash_args dist/
-          git describe --always --dirty > dist/VERSION
+          # the checkout belongs to another user inside the container, so no git here
+          echo "${{ github.sha }} (${{ github.ref_name }})" > dist/VERSION
           ( cd dist && sha256sum * > SHA256SUMS )
           cat dist/VERSION dist/SHA256SUMS
 
