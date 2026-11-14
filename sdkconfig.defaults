@@ -8,3 +8,9 @@ CONFIG_APP_PROJECT_VER_FROM_CONFIG=y
 CONFIG_APP_PROJECT_VER="0.1.0"
 # Larger main task: settings structs and init on the stack
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=4096
+# Crash reports: core dump to flash (ELF), summary logged on the next boot
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_COREDUMP_CHECKSUM_CRC32=y
+# A hung task should also leave a crash report instead of only a warning
+CONFIG_ESP_TASK_WDT_PANIC=y

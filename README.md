@@ -35,6 +35,7 @@ Not yet: drivers for SHT2x/SHT3x/AHT20/BME280/VL53L0X/DS18B20, firmware upload.
 | `components/sa_mqtt/` | MQTT client: status/last will, info, discovery, actor commands |
 | `components/sa_i2c/` | I2C bus and sensor detection (address + chip-ID register) |
 | `components/sensors/` | sensor framework (storage, read task, median, MQTT) and drivers (VL53L1X) |
+| `components/sa_crash/` | crash report: core dump summary, download, erase |
 | `components/sa_log/` | ring buffer of warnings and errors for the Status page |
 | `components/actors/` | GPIO relays, power-on state, rule evaluation, MQTT switch |
 | `components/rules/` | threshold rule engine (pure C) |
@@ -70,6 +71,18 @@ sa> reboot
 ```
 
 Other console commands: `status`, `show`, `log`, `scan` (I2C bus), `net`, `ping <ip>`, `factory-reset`, `help`.
+
+## Crash reports
+
+After a crash (including watchdog timeouts) the firmware keeps a core dump in flash. Its summary appears in the error log; to analyse it:
+
+```sh
+curl -o coredump.elf http://<device>/api/crash/dump
+idf.py coredump-info -c coredump.elf      # needs the matching build/sensor-actor.elf
+curl -X DELETE http://<device>/api/crash
+```
+
+`crash-test abort|intwdt` on the console crashes on purpose to check this.
 
 ## Tests
 

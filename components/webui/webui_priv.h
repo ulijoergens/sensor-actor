@@ -10,3 +10,4 @@ cJSON *webui_read_json(httpd_req_t *req, const char **why);  // NULL + why on er
 
 void webui_register_sensors(httpd_handle_t srv);
 void webui_register_actors(httpd_handle_t srv);
+void webui_register_crash(httpd_handle_t srv);

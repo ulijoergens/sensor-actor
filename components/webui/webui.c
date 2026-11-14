@@ -375,6 +375,7 @@ esp_err_t webui_start(void)
     }
     webui_register_sensors(srv);
     webui_register_actors(srv);
+    webui_register_crash(srv);
     ESP_LOGI(TAG, "web UI running on port %d", cfg.server_port);
     return ESP_OK;
 }

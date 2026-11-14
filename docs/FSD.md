@@ -202,11 +202,13 @@ The UI is plain HTML, CSS and JavaScript, gzipped and built into the firmware so
 | phy_init | data/phy | 0x11000 | 4 KB |
 | ota_0 | app | 0x20000 | 1.75 MB |
 | ota_1 | app | 0x1E0000 | 1.75 MB |
-| storage | data/littlefs | 0x3A0000 | 384 KB (persistent error log, spare) |
+| storage | data/littlefs | 0x3A0000 | 320 KB (persistent error log, spare) |
+| coredump | data/coredump | 0x3F0000 | 64 KB (crash report, REQ-LOG-2) |
 
 ## 9. Persistence and logging
 
 - **REQ-PER-1:** the configuration (device, network, sensors, actors, rules) is stored in NVS as versioned records. "Factory reset": hold BOOT for 10 s, or press the button in Settings.
+- **REQ-LOG-2:** after a crash or watchdog panic, a core dump (ELF) is kept in the `coredump` partition. On the next boot a one-line summary (task, PC, panic reason) goes into the error log; `GET /api/crash` returns the summary with the backtrace, `GET /api/crash/dump` downloads the dump, `DELETE /api/crash` erases it.
 - **REQ-LOG-1:** the error log is a RAM ring buffer of 100 entries (time, level, source, text). The last 20 warnings and errors are copied to flash so they survive a reboot. The time comes from SNTP, or from uptime while no time is available.
 
 ## 10. Testing (Universal-ESP32-Workbench)

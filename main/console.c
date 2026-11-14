@@ -20,6 +20,7 @@
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "lwip/inet.h"
 #include "ping/ping_sock.h"
 #include "sa_config.h"
@@ -254,6 +255,25 @@ static int cmd_scan(int argc, char **argv)
     return 0;
 }
 
+// Deliberate crashes to verify the crash report (REQ-LOG-2).
+static int cmd_crash_test(int argc, char **argv)
+{
+    if (argc < 2 || (strcmp(argv[1], "abort") && strcmp(argv[1], "intwdt"))) {
+        printf("usage: crash-test abort|intwdt   (restarts the device and stores a crash report)\n");
+        return 1;
+    }
+    printf("crashing now (%s)\n", argv[1]);
+    fflush(stdout);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    if (!strcmp(argv[1], "abort")) {
+        abort();
+    }
+    portDISABLE_INTERRUPTS();   // hold interrupts off until the interrupt watchdog fires
+    for (;;) {
+    }
+    return 0;
+}
+
 static int cmd_reboot(int argc, char **argv)
 {
     printf("rebooting\n");
@@ -286,6 +306,7 @@ void console_start(void)
         {.command = "net", .help = "IP address, gateway, DNS and access point details", .func = cmd_net},
         {.command = "ping", .help = "ping <ip> [count]: check reachability from the device", .func = cmd_ping},
         {.command = "reboot", .help = "Restart the device", .func = cmd_reboot},
+        {.command = "crash-test", .help = "crash-test abort|intwdt: crash on purpose to test crash reports", .func = cmd_crash_test},
         {.command = "factory-reset", .help = "Erase all settings and restart", .func = cmd_factory_reset},
     };
     for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {

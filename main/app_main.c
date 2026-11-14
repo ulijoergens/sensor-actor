@@ -13,6 +13,7 @@
 
 #include "console.h"
 #include "sa_config.h"
+#include "sa_crash.h"
 #include "sa_i2c.h"
 #include "sa_log.h"
 #include "actors.h"
@@ -65,6 +66,7 @@ void app_main(void)
     const esp_app_desc_t *app = esp_app_get_description();
     ESP_LOGI(TAG, "sensor-actor %s starting (slot %s)", app->version, esp_ota_get_running_partition()->label);
 
+    sa_crash_init();   // logs a stored crash report into the error log
     init_nvs();
     ESP_ERROR_CHECK(sa_config_init());
     ESP_ERROR_CHECK(esp_netif_init());
