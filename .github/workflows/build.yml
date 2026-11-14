@@ -1,0 +1,53 @@
+name: Build firmware
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # ESP-IDF v6.1, pinned by digest so every build uses the same toolchain.
+    container:
+      image: espressif/idf:v6.1@sha256:81893c71bb5e570088901f21def8684c25cd2a9020281bd01b843a7655edb18c
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build firmware
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py set-target esp32
+          idf.py build
+          idf.py size
+
+      - name: Build unit tests (run on hardware, compiled here)
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py -C test/unit set-target esp32
+          idf.py -C test/unit build
+
+      - name: Collect firmware files
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp build/sensor-actor.bin build/sensor-actor.elf dist/
+          cp build/bootloader/bootloader.bin build/partition_table/partition-table.bin dist/
+          cp build/ota_data_initial.bin dist/ 2>/dev/null || true
+          cp build/flash_args dist/
+          git describe --always --dirty > dist/VERSION
+          ( cd dist && sha256sum * > SHA256SUMS )
+          cat dist/VERSION dist/SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sensor-actor-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error

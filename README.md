@@ -1,5 +1,7 @@
 # sensor-actor
 
+[![Build firmware](https://github.com/ulijoergens/sensor-actor/actions/workflows/build.yml/badge.svg)](https://github.com/ulijoergens/sensor-actor/actions/workflows/build.yml)
+
 ESP-IDF firmware for an ESP32 node that reads sensors, switches relays with threshold rules, talks MQTT (with discovery for openHAB / Home Assistant), and is configured through a built-in web UI with OTA updates.
 
 **Status:** early development.
@@ -60,6 +62,10 @@ idf.py -p /dev/ttyUSB0 flash monitor
 cJSON and the MQTT client are fetched from the ESP component registry on the first build; the versions are pinned in the components' `idf_component.yml` files.
 
 openHAB picks the node up automatically if the MQTT binding is connected to the same broker and the **Home Assistant Binding** add-on is installed.
+
+## Prebuilt firmware
+
+Every push to `main` is built by GitHub Actions (ESP-IDF v6.1, `.github/workflows/build.yml`). The firmware files are attached to each run under *Artifacts*: `sensor-actor.bin` is the file for the firmware upload on the Settings page; `sensor-actor.elf` decodes crash reports of that build.
 
 ## First start
 
